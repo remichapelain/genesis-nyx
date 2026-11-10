@@ -23,3 +23,11 @@ Thumbs.db
 
 # Local-only docs preview output
 public/
+
+# glTF test suite: generated inputs and render outputs
+examples/gltf_tests/generated/
+examples/gltf_tests/out/
+
+# Genesis surface tests: render outputs
+examples/surface_tests/out/
+examples/surface_tests/textures/
