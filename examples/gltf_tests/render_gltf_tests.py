@@ -2,7 +2,7 @@
 
 Usage:
     python examples/gltf_tests/make_gltf_tests.py      # create generated/*.glb first
-    python examples/gltf_tests/render_gltf_tests.py    # -> out/<test>_<mode>.png
+    python examples/gltf_tests/render_gltf_tests.py    # -> out/<test>_<n>_<mode>.png
     python examples/gltf_tests/render_gltf_tests.py generated/03_roughness_0_05_1.glb   # a single file
 
 Each file is rendered in its own Python process, so a crash on one file
@@ -55,7 +55,8 @@ def render(model):
         if i > 0:
             cam._shared_metadata.renderer._renderer.set_render_mode(getattr(npr.ERenderMode, mode))
         scene.step()  # the camera renders during step
-        out = os.path.join(OUT_DIR, "%s_%s.png" % (name, mode))
+        # Number the modes so a file browser lists them in quality order.
+        out = os.path.join(OUT_DIR, "%s_%d_%s.png" % (name, i + 1, mode))
         Image.fromarray(cam.read().rgb[0].cpu().numpy()).save(out)
         print("Saved", out)
 

@@ -14,6 +14,7 @@ import struct
 import zlib
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated")
+TEX_DIR = os.path.join(OUT_DIR, "textures")  # copies of every texture, for inspection / other renderers
 
 
 # ---------------------------------------------------------------- PNG textures
@@ -96,7 +97,9 @@ def box(sx, sy, sz, center=(0, 0, 0)):
 # ---------------------------------------------------------------- glTF builder
 
 class Gltf:
-    def __init__(self):
+    def __init__(self, name):
+        self.name = name
+        self.pngs = {}  # file name -> PNG bytes, also written to TEX_DIR
         self.d = {"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": []}],
                   "nodes": [], "meshes": [], "materials": [], "accessors": [], "bufferViews": []}
         self.bin = bytearray()
@@ -121,7 +124,8 @@ class Gltf:
         self.d["accessors"].append(acc)
         return len(self.d["accessors"]) - 1
 
-    def texture(self, png_bytes):
+    def texture(self, png_bytes, name):
+        self.pngs["%s_%s.png" % (self.name, name)] = png_bytes
         self.d.setdefault("images", []).append({"bufferView": self._view(png_bytes), "mimeType": "image/png"})
         self.d.setdefault("textures", []).append({"source": len(self.d["images"]) - 1})
         return {"index": len(self.d["textures"]) - 1}
@@ -156,6 +160,10 @@ class Gltf:
             self.node(m, translation=[(i - (len(meshes) - 1) / 2) * spacing, 0, 0])
 
     def save(self, path):
+        os.makedirs(TEX_DIR, exist_ok=True)
+        for fname, data in self.pngs.items():
+            with open(os.path.join(TEX_DIR, fname), "wb") as f:
+                f.write(data)
         self.d["buffers"] = [{"byteLength": len(self.bin)}]
         js = json.dumps(self.d).encode()
         js += b" " * (-len(js) % 4)
@@ -184,17 +192,17 @@ def roughness_0_05_1(g):
 
 def base_color_texture_quadrants(g):
     """Front-facing quad: top-left red, top-right green, bottom-left blue, bottom-right yellow."""
-    g.node(g.mesh(quad(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_quadrants()))))
+    g.node(g.mesh(quad(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_quadrants(), "quadrants"))))
 
 
 def base_color_texture_on_sphere(g):
     """Checker texture on a sphere, plain white factor."""
-    g.node(g.mesh(sphere(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_checker()))))
+    g.node(g.mesh(sphere(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_checker(), "checker"))))
 
 
 def normal_map_off_on(g):
     """Left: no normal map. Right: bump normal map (bumps should look convex)."""
-    bumps = g.texture(tex_bumps())
+    bumps = g.texture(tex_bumps(), "normal_bumps")
     g.row([g.mesh(sphere(), g.pbr(rough=0.3), tangents=True),
            g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
 
@@ -214,7 +222,7 @@ def alpha_opaque_blend_mask(g):
 def double_sided_on_off(g):
     """Two quads seen from the BACK: left doubleSided (visible), right single-sided (culled)."""
     flip = [0, 1, 0, 0]  # 180 deg around Y
-    tex = g.texture(tex_quadrants())
+    tex = g.texture(tex_quadrants(), "quadrants")
     g.node(g.mesh(quad(), g.pbr(baseColorTexture=tex, doubleSided=True)), translation=[-0.6, 0, 0], rotation=flip)
     g.node(g.mesh(quad(), g.pbr(baseColorTexture=tex)), translation=[0.6, 0, 0], rotation=flip)
 
@@ -243,9 +251,10 @@ TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_colo
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     for i, test in enumerate(TESTS, 1):
-        g = Gltf()
+        name = "%02d_%s" % (i, test.__name__)
+        g = Gltf(name)
         test(g)
-        path = os.path.join(OUT_DIR, "%02d_%s.glb" % (i, test.__name__))
+        path = os.path.join(OUT_DIR, name + ".glb")
         g.save(path)
         print("wrote", path)
 
