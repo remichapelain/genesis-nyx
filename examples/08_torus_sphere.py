@@ -21,15 +21,17 @@ from gs_nyx_plugin.nyx_camera_options import NyxCameraOptions
 
 
 HERE        = os.path.dirname(__file__)
-MODEL       = os.path.join(HERE, "assets", "spheres.glb")
+# MODEL       = os.path.join(HERE, "assets", "spheres.glb")
+MODEL       = os.path.join(HERE, "assets", "sphere.gltf")
 ENV_MAP     = os.path.join(HERE, "assets", "green_sanctuary_4k.hdr")
+OUTPUT_PATH_FASTPATHTRACER = os.path.join(HERE, "out", "08_torus_sphere_FastPathtracer.png")
 OUTPUT_PATH_REFPATHTRACER = os.path.join(HERE, "out", "08_torus_sphere_RefPathtracer.png")
 OUTPUT_PATH_FORWARD = os.path.join(HERE, "out", "08_torus_sphere_Forward.png")
 
-CAM_POS    = (0.0, -10, 0)
-CAM_LOOKAT = (0.0,  0.0, 0.0)
-CAM_RES    = (1920, 1080)
-CAM_FOV    = 35.0
+CAM_POS    = (-0.5, 0.0, 0.5)
+CAM_LOOKAT = (0.0, 0.0, 0.1)
+CAM_RES    = (2048, 2048)
+CAM_FOV    = 20.0
 
 def main() -> None:
     gs.init()
@@ -53,10 +55,10 @@ def main() -> None:
 
     # Describe the Nyx camera sensor
     cam = scene.add_sensor(NyxCameraOptions(
-        res         = (1920, 1080),
-        pos         = (-0.5, 0.0, 0.5),
-        lookat      = (0.0, 0.0, 0.1),
-        fov         = 20.0,
+        res         = CAM_RES,
+        pos         = CAM_POS,
+        lookat      = CAM_LOOKAT,
+        fov         = CAM_FOV,
         spp         = 64,
         render_mode = npr.ERenderMode.RefPathTracer,
         env_maps    = (env_map,),
@@ -68,14 +70,25 @@ def main() -> None:
     # This simulation step makes the camera sensor render the frame
     scene.step()
 
+    
+    
     # Read back the sensor frame and save it
     rgb = cam.read().rgb[0].cpu().numpy()
-    os.makedirs(os.path.dirname(OUTPUT_PATH_REFPATHTRACER), exist_ok=True)
-    Image.fromarray(rgb).save(OUTPUT_PATH_REFPATHTRACER)
-    print(f"Saved {OUTPUT_PATH_REFPATHTRACER}")
+    os.makedirs(os.path.dirname(OUTPUT_PATH_FORWARD), exist_ok=True)
+    Image.fromarray(rgb).save(OUTPUT_PATH_FORWARD)
+    print(f"Saved {OUTPUT_PATH_FORWARD}")
     
+    cam._shared_metadata.renderer._renderer.set_render_mode(npr.ERenderMode.FastPathTracer)
+    scene.step()
+    
+    # Read back the sensor frame and save it
+    rgb = cam.read().rgb[0].cpu().numpy()
+    os.makedirs(os.path.dirname(OUTPUT_PATH_FASTPATHTRACER), exist_ok=True)
+    Image.fromarray(rgb).save(OUTPUT_PATH_FASTPATHTRACER)
+    print(f"Saved {OUTPUT_PATH_FASTPATHTRACER}")
+
     cam._shared_metadata.renderer._renderer.set_render_mode(npr.ERenderMode.Forward)
-    # scene.step()
+    scene.step()
     
     # Read back the sensor frame and save it
     rgb = cam.read().rgb[0].cpu().numpy()
