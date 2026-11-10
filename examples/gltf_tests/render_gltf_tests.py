@@ -2,8 +2,10 @@
 
 Usage:
     python examples/gltf_tests/make_gltf_tests.py      # create generated/*.glb first
-    python examples/gltf_tests/render_gltf_tests.py    # -> out/<test>_<n>_<mode>.png
-    python examples/gltf_tests/render_gltf_tests.py generated/03_roughness_0_05_1.glb   # a single file
+    python examples/gltf_tests/render_gltf_tests.py               # all tests -> out/<test>_<n>_<mode>.png
+    python examples/gltf_tests/render_gltf_tests.py 07 17        # only tests whose name contains "07" or "17"
+    python examples/gltf_tests/render_gltf_tests.py anisotropy   # all anisotropy tests
+    python examples/gltf_tests/render_gltf_tests.py sampler emissive
 
 Each file is rendered in its own Python process, so a crash on one file
 doesn't stop the others.
@@ -62,15 +64,23 @@ def render(model):
 
 
 def main():
-    if len(sys.argv) > 1:
-        render(os.path.abspath(sys.argv[1]))
+    if len(sys.argv) > 2 and sys.argv[1] == "--worker":  # internal: render one file in this process
+        render(sys.argv[2])
         return
     files = sorted(glob.glob(os.path.join(GEN_DIR, "*.glb")))
     if not files:
         sys.exit("No files in %s, run make_gltf_tests.py first." % GEN_DIR)
+    filters = sys.argv[1:]
+    if filters:
+        # Keep a file if any filter is part of its name ("07", "aniso") or is its path.
+        files = [f for f in files
+                 if any(p in os.path.basename(f) or os.path.abspath(p) == f for p in filters)]
+        if not files:
+            sys.exit("No test matches %s. Available:\n  %s" % (filters, "\n  ".join(
+                os.path.basename(f) for f in sorted(glob.glob(os.path.join(GEN_DIR, "*.glb"))))))
     for f in files:
         print("==>", os.path.basename(f))
-        if subprocess.run([sys.executable, os.path.abspath(__file__), f]).returncode != 0:
+        if subprocess.run([sys.executable, os.path.abspath(__file__), "--worker", f]).returncode != 0:
             print("    FAILED:", os.path.basename(f))
 
 

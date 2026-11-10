@@ -61,6 +61,29 @@ def tex_aniso_checker(n=128, cells=8):
     return png(n, n, lambda x, y: ANISO_H if (x * cells // n + y * cells // n) % 2 else ANISO_V)
 
 
+def tex_stripes(n=128, stripes=8):
+    """White / black horizontal stripes (used as an emissive mask)."""
+    return png(n, n, lambda x, y: (255, 255, 255) if (y * stripes // n) % 2 == 0 else (0, 0, 0))
+
+
+def tex_tiny_4x4():
+    """4x4 texels of distinct colours, to be magnified a lot."""
+    pal = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255),
+           (0, 0, 0), (255, 255, 0), (0, 255, 255), (255, 0, 255)]
+    return png(4, 4, lambda x, y: pal[(x + 3 * y) % len(pal)])
+
+
+# Size of the 1-texel checker used by the minification test (18). With the default camera a
+# quad is ~235 px wide on screen: 256 gives ~1 texel per pixel (strongest moire); larger values
+# average to grey even without mipmaps, smaller ones are no longer minified at all.
+PIXEL_CHECKER_SIZE = 256
+
+
+def tex_pixel_checker(n=PIXEL_CHECKER_SIZE):
+    """1-texel black/white checker: averages to grey when properly minified."""
+    return png(n, n, lambda x, y: (255, 255, 255) if (x + y) % 2 else (0, 0, 0))
+
+
 def tex_bumps(n=128, cells=4):
     """Tangent-space normal map with round bumps (glTF / OpenGL convention, +Y up)."""
     c = n / cells
@@ -95,10 +118,10 @@ def sphere(r=0.5, seg=48, rings=24):
     return dict(pos=pos, nrm=nrm, uv=uv, tan=tan, idx=idx)
 
 
-def quad(size=1.0):
-    h = size / 2
+def quad(size=1.0, uv_scale=1.0):
+    h, s = size / 2, uv_scale
     return dict(pos=[(-h, -h, 0), (h, -h, 0), (h, h, 0), (-h, h, 0)], nrm=[(0, 0, 1)] * 4,
-                uv=[(0, 1), (1, 1), (1, 0), (0, 0)], tan=[(1, 0, 0, 1)] * 4, idx=[0, 1, 2, 0, 2, 3])
+                uv=[(0, s), (s, s), (s, 0), (0, 0)], tan=[(1, 0, 0, 1)] * 4, idx=[0, 1, 2, 0, 2, 3])
 
 
 def box(sx, sy, sz, center=(0, 0, 0)):
@@ -144,10 +167,14 @@ class Gltf:
         self.d["accessors"].append(acc)
         return len(self.d["accessors"]) - 1
 
-    def texture(self, png_bytes, name):
+    def texture(self, png_bytes, name, sampler=None):
         self.pngs["%s_%s.png" % (self.name, name)] = png_bytes
         self.d.setdefault("images", []).append({"bufferView": self._view(png_bytes), "mimeType": "image/png"})
-        self.d.setdefault("textures", []).append({"source": len(self.d["images"]) - 1})
+        tex = {"source": len(self.d["images"]) - 1}
+        if sampler is not None:
+            self.d.setdefault("samplers", []).append(sampler)
+            tex["sampler"] = len(self.d["samplers"]) - 1
+        self.d.setdefault("textures", []).append(tex)
         return {"index": len(self.d["textures"]) - 1}
 
     def material(self, **m):
@@ -227,15 +254,21 @@ def normal_map_off_on(g):
            g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
 
 
-def emissive_off_on_strength4(g):
-    """Black spheres: left no emission, middle emissiveFactor orange, right same factor
-    x KHR_materials_emissive_strength 4 (must be clearly brighter than the middle one)."""
+def emissive_none_factor_strength4_texture(g):
+    """Black spheres, left to right:
+    1. no emission
+    2. emissiveFactor orange
+    3. same factor x KHR_materials_emissive_strength 4 (must be clearly brighter than 2)
+    4. same factor x emissiveTexture of white/black stripes -> orange glowing stripes,
+       black (non-glowing) stripes in between."""
     g.d["extensionsUsed"] = ["KHR_materials_emissive_strength"]
     orange = [1, 0.4, 0]
     g.row([g.mesh(sphere(), g.pbr((0, 0, 0, 1))),
            g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange)),
            g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange,
-                                  extensions={"KHR_materials_emissive_strength": {"emissiveStrength": 4.0}}))])
+                                  extensions={"KHR_materials_emissive_strength": {"emissiveStrength": 4.0}})),
+           g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange,
+                                  emissiveTexture=g.texture(tex_stripes(), "emissive_stripes")))])
 
 
 def alpha_opaque_blend_mask(g):
@@ -273,6 +306,117 @@ def axes_x_red_y_green_z_blue(g):
                               ((0.1, 1, 0.1), (0, 0.5, 0), (0.05, 0.8, 0.05, 1)),
                               ((0.1, 0.1, 1), (0, 0, 0.5), (0.05, 0.1, 0.9, 1))):
         g.node(g.mesh(box(*size, center=center), g.pbr(col)))
+
+
+# ---- metallicRoughnessTexture + occlusionTexture -----------------------------------
+# glTF: metallicRoughnessTexture -> G = roughness, B = metalness, R is IGNORED (both multiplied
+# by their factors). occlusionTexture -> R = occlusion, blended by "strength". Both are linear.
+# Nyx stores all three in a single "ARM" texture (R = AO, G = roughness, B = metal), so the
+# importer has to merge two glTF textures into one: these tests target that merge.
+
+GOLD = (1.0, 0.77, 0.34, 1)
+
+
+def tex_mr_grid(n=128, cells=4):
+    """Roughness (G) increases left -> right, metalness (B) increases top -> bottom. R = 255."""
+    return png(n, n, lambda x, y: (255, 255 * (x * cells // n) // (cells - 1), 255 * (y * cells // n) // (cells - 1)))
+
+
+def tex_mr_vertical_bands(n=128, bands=4):
+    """Vertical bands alternating polished metal (rough 0.2, metal 1) / satin plastic (rough 0.6, metal 0)."""
+    return png(n, n, lambda x, y: (255, 51, 255) if (x * bands // n) % 2 == 0 else (255, 153, 0))
+
+
+def tex_ao_horizontal_bands(n=64, bands=8):
+    """Occlusion (R) in horizontal bands alternating 0.15 (dark) / 1.0 (none). G, B unused."""
+    return png(n, n, lambda x, y: (38, 255, 255) if (y * bands // n) % 2 == 0 else (255, 255, 255))
+
+
+def metallic_roughness_texture_vs_factors(g):
+    """Four gold spheres that must ALL LOOK IDENTICAL (polished metal: metallic 1, roughness 0.2):
+    1. factors only (reference)
+    2. 1x1 texture (R 255, G 0.2, B 1) with factors 1
+    3. same texture but R = 0: R must be ignored. Darker than 1 => the importer reads R as AO
+    4. texture G 1.0 x roughnessFactor 0.2: texture and factor must multiply"""
+    g.row([g.mesh(sphere(), g.pbr(GOLD, 1.0, 0.2)),
+           g.mesh(sphere(), g.pbr(GOLD, 1.0, 1.0, metallicRoughnessTexture=g.texture(tex_solid((255, 51, 255)), "mr_r255"))),
+           g.mesh(sphere(), g.pbr(GOLD, 1.0, 1.0, metallicRoughnessTexture=g.texture(tex_solid((0, 51, 255)), "mr_r0"))),
+           g.mesh(sphere(), g.pbr(GOLD, 1.0, 0.2, metallicRoughnessTexture=g.texture(tex_solid((255, 255, 255)), "mr_white")))])
+
+
+def metallic_roughness_texture_grid(g):
+    """Quad + sphere with a 4x4 metallicRoughnessTexture: roughness increases left -> right,
+    metalness increases top -> bottom. Top row = plastic, bottom row = gold metal; left column
+    sharp reflections, right column blurry. Rotated/mirrored grid => G and B channels swapped."""
+    mat = g.pbr(GOLD, 1.0, 1.0, metallicRoughnessTexture=g.texture(tex_mr_grid(), "mr_grid"))
+    g.row([g.mesh(quad(), mat), g.mesh(sphere(), mat)])
+
+
+def occlusion_none_strength_0_05_1(g):
+    """White matte spheres with an occlusionTexture of dark horizontal bands. Left to right:
+    no occlusion texture, strength 0 (must equal no texture), strength 0.5 (light bands),
+    strength 1 (dark bands). Note: a path tracer computes real occlusion itself and may
+    legitimately ignore AO textures, so compare in Forward first."""
+    ao = g.texture(tex_ao_horizontal_bands(), "ao_bands")
+    g.row([g.mesh(sphere(), g.pbr((0.9, 0.9, 0.9, 1), 0.0, 0.8))] +
+          [g.mesh(sphere(), g.pbr((0.9, 0.9, 0.9, 1), 0.0, 0.8, occlusionTexture=dict(ao, strength=st)))
+           for st in (0.0, 0.5, 1.0)])
+
+
+def occlusion_and_mr_separate_packed_ao_only_mr_only(g):
+    """How the importer merges glTF's two textures into Nyx's single ARM texture:
+    1. SEPARATE images: MR = vertical bands (polished gold / satin plastic), AO = dark horizontal
+       bands. The AO image is 64x64 and the MR image 128x128 on purpose (merge must resample).
+    2. PACKED: one ORM image used for both slots. Must look identical to 1.
+    3. AO only, metal/rough from factors (metallic 1, roughness 0.2): polished gold + dark
+       horizontal bands, no vertical bands (missing MR must count as 1 so the factors apply).
+    4. MR only, no AO: vertical bands, no dark horizontal bands (missing AO must count as 1)."""
+    mr = g.texture(tex_mr_vertical_bands(), "mr_vertical_bands")
+    ao = g.texture(tex_ao_horizontal_bands(), "ao_horizontal_bands")
+    n = 128
+    orm = png(n, n, lambda x, y: (38 if (y * 8 // n) % 2 == 0 else 255,) +
+              ((51, 255) if (x * 4 // n) % 2 == 0 else (153, 0)))
+    packed = g.texture(orm, "orm_packed")
+    g.row([g.mesh(sphere(), g.pbr(GOLD, 1.0, 1.0, metallicRoughnessTexture=mr, occlusionTexture=ao)),
+           g.mesh(sphere(), g.pbr(GOLD, 1.0, 1.0, metallicRoughnessTexture=packed, occlusionTexture=packed)),
+           g.mesh(sphere(), g.pbr(GOLD, 1.0, 0.2, occlusionTexture=ao)),
+           g.mesh(sphere(), g.pbr(GOLD, 1.0, 1.0, metallicRoughnessTexture=mr))])
+
+
+# ---- samplers -------------------------------------------------------------------
+# glTF constants: wrap REPEAT 10497, CLAMP_TO_EDGE 33071, MIRRORED_REPEAT 33648,
+# filter NEAREST 9728, LINEAR 9729, LINEAR_MIPMAP_LINEAR 9987.
+
+def sampler_wrap_repeat_clamp_mirror_mixed(g):
+    """Quadrant texture (top-left red, top-right green, bottom-left blue, bottom-right yellow)
+    on quads whose UVs go 0..3, so the texture is tiled 3x3. Left to right:
+    1. REPEAT: 9 identical tiles.
+    2. CLAMP_TO_EDGE: one tile in the top-left corner, the edge colours smeared over the rest
+       (green/yellow stripes to the right, blue/yellow below, yellow in the bottom-right).
+    3. MIRRORED_REPEAT: tiles flipped every other time, so same colours touch across tile borders.
+    4. Mixed: wrapS REPEAT, wrapT CLAMP_TO_EDGE: repeats horizontally, smeared vertically
+       (catches an importer that uses one wrap mode for both axes)."""
+    def q(ws, wt):
+        tex = g.texture(tex_quadrants(), "quadrants", sampler={"wrapS": ws, "wrapT": wt, "magFilter": 9729, "minFilter": 9729})
+        return g.mesh(quad(uv_scale=3.0), g.pbr((1, 1, 1, 1), baseColorTexture=tex))
+    g.row([q(10497, 10497), q(33071, 33071), q(33648, 33648), q(10497, 33071)])
+
+
+def sampler_filter_mag_nearest_linear_min_nearest_mipmap(g):
+    """Left to right:
+    1. 4x4 texel texture, magFilter NEAREST: crisp 4x4 grid of coloured squares.
+    2. same texture, magFilter LINEAR: blurry colour gradients.
+    3. 256x256 one-texel black/white checker (PIXEL_CHECKER_SIZE), minFilter NEAREST: noisy / moire pattern.
+    4. same, minFilter LINEAR_MIPMAP_LINEAR: smooth uniform grey.
+    Note: the path tracers average many samples per pixel, which hides most of the difference
+    between 3 and 4; compare those two in Forward."""
+    def q(png_bytes, name, mag, mn):
+        tex = g.texture(png_bytes, name, sampler={"magFilter": mag, "minFilter": mn})
+        return g.mesh(quad(), g.pbr((1, 1, 1, 1), baseColorTexture=tex))
+    g.row([q(tex_tiny_4x4(), "tiny_4x4", 9728, 9728),
+           q(tex_tiny_4x4(), "tiny_4x4", 9729, 9729),
+           q(tex_pixel_checker(), "pixel_checker", 9729, 9728),
+           q(tex_pixel_checker(), "pixel_checker", 9729, 9987)])
 
 
 # ---- KHR_materials_anisotropy -----------------------------------------------------
@@ -333,11 +477,85 @@ def anisotropy_with_without_tangents(g):
            g.mesh(sphere(), aniso_mat(g, strength=1.0), tangents=False)])
 
 
+# ---- everything together -------------------------------------------------------------
+
+def rot_y(deg):
+    """glTF quaternion [x, y, z, w] for a rotation around Y."""
+    return [0, math.sin(math.radians(deg) / 2), 0, math.cos(math.radians(deg) / 2)]
+
+
+def tex_combined_base(n=128, cells=8):
+    """Checker white / light blue."""
+    return png(n, n, lambda x, y: (230, 230, 230) if (x * cells // n + y * cells // n) % 2 else (90, 140, 230))
+
+
+def tex_combined_orm(n=128):
+    """Packed ORM. R (AO): dark band in the middle (v 0.45..0.55).
+    G (roughness): top half 0.15 (polished), bottom half 0.7 (rough).
+    B (metal): 4 vertical bands alternating metal / non-metal."""
+    def f(x, y):
+        u, v = x / n, y / n
+        return (51 if 0.45 <= v < 0.55 else 255, 38 if v < 0.5 else 179, 255 if int(u * 4) % 2 == 0 else 0)
+    return png(n, n, f)
+
+
+def tex_combined_emissive(n=128):
+    """White band at v 0.2..0.27, black elsewhere (tinted cyan by emissiveFactor)."""
+    return png(n, n, lambda x, y: (255, 255, 255) if 0.2 <= y / n < 0.27 else (0, 0, 0))
+
+
+def combined_all_basic_features(g):
+    """Everything from the single-feature tests at once. Each texture drives a different region
+    so every feature stays readable:
+
+    LEFT  sphere and MIDDLE quad share ONE material ("hero"):
+      - base colour: white / light-blue checker (texture) x warm tint (factor (1, 0.85, 0.7))
+      - metallicRoughness + occlusion from ONE packed ORM texture:
+          top half polished, bottom half rough (G), 4 vertical bands metal / non-metal (B),
+          dark AO band around the middle (R, Forward only, Blender ignores AO)
+      - normal map: 4x4 convex bumps, scale 0.6
+      - emissive: glowing CYAN ring/band in the upper part (white texture band x cyan factor)
+      - sampler: REPEAT + mipmapped LINEAR
+    RIGHT leaf: double-sided quad, alphaMode MASK (cutoff 0.5) with the 0.75/0.25 alpha checker,
+      the same bump normal map, seen from its BACK: half the cells cut out, no culling.
+
+    Node hierarchy: everything hangs under one root node (scale 1, translated down 0.05 to
+    test nested transforms); sphere rotated 200 deg around Y, quad rotated -20 deg around Y,
+    leaf = parent (translation + uniform scale 0.9) -> child (rotation 210 deg around Y)."""
+    smp = {"wrapS": 10497, "wrapT": 10497, "magFilter": 9729, "minFilter": 9987}
+    base = g.texture(tex_combined_base(), "combined_base", sampler=smp)
+    orm = g.texture(tex_combined_orm(), "combined_orm_packed", sampler=smp)
+    nrm = g.texture(tex_bumps(), "combined_normal_bumps", sampler=smp)
+    emi = g.texture(tex_combined_emissive(), "combined_emissive", sampler=smp)
+    hero = g.pbr((1, 0.85, 0.7, 1), 1.0, 1.0,
+                 baseColorTexture=base, metallicRoughnessTexture=orm,
+                 occlusionTexture=dict(orm, strength=1.0), normalTexture=dict(nrm, scale=0.6),
+                 emissiveTexture=emi, emissiveFactor=[0.2, 1.0, 1.0])
+    leaf = g.pbr((1, 1, 1, 1), 0.0, 0.5, alphaMode="MASK", alphaCutoff=0.5, doubleSided=True,
+                 baseColorTexture=g.texture(tex_alpha_checker(), "combined_alpha_checker", sampler=smp),
+                 normalTexture=nrm)
+
+    def add(**n):
+        g.d["nodes"].append(n)
+        return len(g.d["nodes"]) - 1
+
+    sphere_node = add(mesh=g.mesh(sphere(), hero, tangents=True), translation=[-1.2, 0, 0], rotation=rot_y(200))
+    quad_node = add(mesh=g.mesh(quad(), hero, tangents=True), rotation=rot_y(-20))
+    leaf_child = add(mesh=g.mesh(quad(), leaf, tangents=True), rotation=rot_y(210))
+    leaf_parent = add(children=[leaf_child], translation=[1.2, 0, 0], scale=[0.9, 0.9, 0.9])
+    root = add(children=[sphere_node, quad_node, leaf_parent], translation=[0, -0.05, 0])
+    g.d["scenes"][0]["nodes"].append(root)
+
+
 TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_color_texture_quadrants,
-         base_color_texture_on_sphere, normal_map_off_on, emissive_off_on_strength4, alpha_opaque_blend_mask,
+         base_color_texture_on_sphere, normal_map_off_on, emissive_none_factor_strength4_texture, alpha_opaque_blend_mask,
          double_sided_on_off, node_transforms, axes_x_red_y_green_z_blue,
          anisotropy_strength_0_05_1, anisotropy_rotation_0_45_90, anisotropy_texture_h_v_checker,
-         anisotropy_texture_blue_strength, anisotropy_with_without_tangents]
+         anisotropy_texture_blue_strength, anisotropy_with_without_tangents,
+         sampler_wrap_repeat_clamp_mirror_mixed, sampler_filter_mag_nearest_linear_min_nearest_mipmap,
+         metallic_roughness_texture_vs_factors, metallic_roughness_texture_grid,
+         occlusion_none_strength_0_05_1, occlusion_and_mr_separate_packed_ao_only_mr_only,
+         combined_all_basic_features]
 
 
 def main():
