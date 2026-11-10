@@ -212,10 +212,15 @@ def normal_map_off_on(g):
            g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
 
 
-def emissive_off_on(g):
-    """Black spheres: left no emission, right emissiveFactor orange."""
+def emissive_off_on_strength4(g):
+    """Black spheres: left no emission, middle emissiveFactor orange, right same factor
+    x KHR_materials_emissive_strength 4 (must be clearly brighter than the middle one)."""
+    g.d["extensionsUsed"] = ["KHR_materials_emissive_strength"]
+    orange = [1, 0.4, 0]
     g.row([g.mesh(sphere(), g.pbr((0, 0, 0, 1))),
-           g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=[1, 0.4, 0]))])
+           g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange)),
+           g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange,
+                                  extensions={"KHR_materials_emissive_strength": {"emissiveStrength": 4.0}}))])
 
 
 def alpha_opaque_blend_mask(g):
