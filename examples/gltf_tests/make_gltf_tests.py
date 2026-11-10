@@ -46,6 +46,21 @@ def tex_alpha_checker(n=128, cells=8):
     return png(n, n, lambda x, y: (255, 128, 0, 191 if (x * cells // n + y * cells // n) % 2 else 64), rgba=True)
 
 
+# Anisotropy textures (linear data): R,G = direction in tangent space mapped 0..1 -> -1..1,
+# B = strength multiplier. (255,128) = along the tangent, (128,255) = along the bitangent.
+ANISO_H = (255, 128, 255)
+ANISO_V = (128, 255, 255)
+
+
+def tex_solid(rgb):
+    return png(1, 1, lambda x, y: rgb)
+
+
+def tex_aniso_checker(n=128, cells=8):
+    """Cells alternate between horizontal and vertical brushing direction."""
+    return png(n, n, lambda x, y: ANISO_H if (x * cells // n + y * cells // n) % 2 else ANISO_V)
+
+
 def tex_bumps(n=128, cells=4):
     """Tangent-space normal map with round bumps (glTF / OpenGL convention, +Y up)."""
     c = n / cells
@@ -260,9 +275,69 @@ def axes_x_red_y_green_z_blue(g):
         g.node(g.mesh(box(*size, center=center), g.pbr(col)))
 
 
+# ---- KHR_materials_anisotropy -----------------------------------------------------
+# Spec: the roughness ALONG the anisotropy direction becomes mix(roughness, 1, strength^2),
+# so highlights/reflections get stretched along that direction. Direction = tangent (glTF
+# TANGENT, i.e. increasing U) rotated by anisotropyRotation (radians, counter-clockwise).
+# On these spheres the tangent runs horizontally (around the vertical axis), so rotation 0
+# = horizontally brushed, rotation 90deg = vertically brushed.
+# All spheres: polished grey metal (metallic 1, roughness 0.2).
+
+def aniso_mat(g, strength=None, rotation=None, texture=None):
+    g.d["extensionsUsed"] = ["KHR_materials_anisotropy"]
+    ext = {}
+    if strength is not None:
+        ext["anisotropyStrength"] = strength
+    if rotation is not None:
+        ext["anisotropyRotation"] = rotation
+    if texture is not None:
+        ext["anisotropyTexture"] = texture
+    return g.pbr((0.9, 0.9, 0.9, 1), 1.0, 0.2, extensions={"KHR_materials_anisotropy": ext})
+
+
+def anisotropy_strength_0_05_1(g):
+    """anisotropyStrength 0 / 0.5 / 1, rotation 0. Left = normal round reflections,
+    then increasingly smeared HORIZONTALLY."""
+    g.row([g.mesh(sphere(), aniso_mat(g, strength=st), tangents=True) for st in (0.0, 0.5, 1.0)])
+
+
+def anisotropy_rotation_0_45_90(g):
+    """anisotropyStrength 1, rotation 0 / 45 / 90 deg. Smear direction turns from
+    horizontal, to diagonal, to vertical. Left must match the right sphere of 12."""
+    g.row([g.mesh(sphere(), aniso_mat(g, strength=1.0, rotation=math.radians(a)), tangents=True)
+           for a in (0, 45, 90)])
+
+
+def anisotropy_texture_h_v_checker(g):
+    """anisotropyStrength 1 + anisotropyTexture. Left: texture direction = tangent (must match
+    12 right). Middle: direction = bitangent (must match 13 right, vertical). Right: checker
+    of horizontal / vertical cells -> patchwork of brushed tiles."""
+    g.row([g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_solid(ANISO_H), "aniso_horizontal")), tangents=True),
+           g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_solid(ANISO_V), "aniso_vertical")), tangents=True),
+           g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_aniso_checker(), "aniso_checker")), tangents=True)])
+
+
+def anisotropy_texture_blue_strength(g):
+    """Texture BLUE channel multiplies anisotropyStrength (direction = tangent everywhere).
+    Left: factor 1 x blue 0.5. Middle: factor 0.5 x blue 1. Right: factor 1 x blue 0.
+    Left and middle must both match 12 middle (strength 0.5); right must match 12 left (none)."""
+    g.row([g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_solid((255, 128, 128)), "aniso_blue_half")), tangents=True),
+           g.mesh(sphere(), aniso_mat(g, strength=0.5, texture=g.texture(tex_solid((255, 128, 255)), "aniso_blue_full")), tangents=True),
+           g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_solid((255, 128, 0)), "aniso_blue_zero")), tangents=True)])
+
+
+def anisotropy_with_without_tangents(g):
+    """anisotropyStrength 1, rotation 0. Left: mesh HAS a TANGENT attribute. Right: no TANGENT,
+    the importer must generate tangents from the UVs. Both must look the same (horizontal smear)."""
+    g.row([g.mesh(sphere(), aniso_mat(g, strength=1.0), tangents=True),
+           g.mesh(sphere(), aniso_mat(g, strength=1.0), tangents=False)])
+
+
 TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_color_texture_quadrants,
-         base_color_texture_on_sphere, normal_map_off_on, emissive_off_on, alpha_opaque_blend_mask,
-         double_sided_on_off, node_transforms, axes_x_red_y_green_z_blue]
+         base_color_texture_on_sphere, normal_map_off_on, emissive_off_on_strength4, alpha_opaque_blend_mask,
+         double_sided_on_off, node_transforms, axes_x_red_y_green_z_blue,
+         anisotropy_strength_0_05_1, anisotropy_rotation_0_45_90, anisotropy_texture_h_v_checker,
+         anisotropy_texture_blue_strength, anisotropy_with_without_tangents]
 
 
 def main():
