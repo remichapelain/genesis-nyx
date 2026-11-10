@@ -19,7 +19,7 @@ GEN_DIR = os.path.join(HERE, "generated")
 OUT_DIR = os.path.join(HERE, "out")
 ENV_MAP = os.path.join(HERE, "..", "assets", "green_sanctuary_4k.hdr")
 
-MODES      = ("Forward", "RefPathTracer")
+MODES      = ("Forward", "FastPathTracer", "RefPathTracer")
 CAM_POS    = (0.0, -5.0, 1.5)   # glTF +Z (front) ends up facing Genesis -Y
 CAM_LOOKAT = (0.0, 0.0, 0.6)
 CAM_RES    = (1280, 640)
