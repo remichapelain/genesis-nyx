@@ -19,15 +19,15 @@ TEX_DIR = os.path.join(OUT_DIR, "textures")  # copies of every texture, for insp
 
 # ---------------------------------------------------------------- PNG textures
 
-def png(w, h, px):
-    """Tiny RGB PNG encoder. px(x, y) -> (r, g, b) in 0..255."""
+def png(w, h, px, rgba=False):
+    """Tiny PNG encoder. px(x, y) -> (r, g, b) or (r, g, b, a) in 0..255."""
     raw = b"".join(b"\0" + b"".join(bytes(px(x, y)) for x in range(w)) for y in range(h))
 
     def chunk(tag, data):
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
 
     return (b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6 if rgba else 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
@@ -39,6 +39,11 @@ def tex_quadrants(n=64):
 
 def tex_checker(n=128, cells=8):
     return png(n, n, lambda x, y: (230, 230, 230) if (x * cells // n + y * cells // n) % 2 else (40, 40, 40))
+
+
+def tex_alpha_checker(n=128, cells=8):
+    """Orange checker whose ALPHA alternates 0.75 / 0.25 (colour is the same in every cell)."""
+    return png(n, n, lambda x, y: (255, 128, 0, 191 if (x * cells // n + y * cells // n) % 2 else 64), rgba=True)
 
 
 def tex_bumps(n=128, cells=4):
@@ -214,9 +219,16 @@ def emissive_off_on(g):
 
 
 def alpha_opaque_blend_mask(g):
-    """Alpha 0.3 with alphaMode OPAQUE (solid), BLEND (see-through), MASK cutoff 0.5 (invisible)."""
+    """Left: alpha 0.3, OPAQUE (alpha ignored -> solid). Middle: alpha 0.3, BLEND (see-through).
+    Right: MASK with the default alphaCutoff 0.5 and a checker texture whose alpha is 0.75 / 0.25:
+    0.75 cells must be fully SOLID (not semi-transparent), 0.25 cells fully cut out. The sphere is
+    double-sided so the inside of the far half shows through the holes."""
     col = (1, 0.5, 0, 0.3)
-    g.row([g.mesh(sphere(), g.pbr(col, alphaMode=m)) for m in ("OPAQUE", "BLEND", "MASK")])
+    mask = g.pbr((1, 1, 1, 1), alphaMode="MASK", doubleSided=True,
+                 baseColorTexture=g.texture(tex_alpha_checker(), "alpha_checker"))
+    g.row([g.mesh(sphere(), g.pbr(col, alphaMode="OPAQUE")),
+           g.mesh(sphere(), g.pbr(col, alphaMode="BLEND")),
+           g.mesh(sphere(), mask)])
 
 
 def double_sided_on_off(g):
