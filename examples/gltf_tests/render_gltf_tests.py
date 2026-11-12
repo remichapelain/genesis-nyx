@@ -27,6 +27,11 @@ CAM_LOOKAT = (0.0, 0.0, 0.6)
 CAM_RES    = (1280, 640)
 CAM_FOV    = 30.0
 
+# Tests rendered WITHOUT the ground plane (matched on the start of the file name).
+# The ground adds bounced light and reflections in the path tracers that Forward doesn't have,
+# which makes subtle shading (normal maps) harder to compare between modes. Empty it to restore.
+NO_GROUND_TESTS = ("06",)
+
 
 def render(model):
     import genesis as gs
@@ -36,8 +41,10 @@ def render(model):
     from PIL import Image
 
     gs.init()
+    name = os.path.splitext(os.path.basename(model))[0]
     scene = gs.Scene(sim_options=gs.options.SimOptions(dt=0.01), show_viewer=False)
-    scene.add_entity(morph=gs.morphs.Plane(plane_size=(20.0, 20.0)))
+    if not name.startswith(NO_GROUND_TESTS):
+        scene.add_entity(morph=gs.morphs.Plane(plane_size=(20.0, 20.0)))
     # Test objects are ~1 unit tall and centred on the origin: lift them above the ground.
     scene.add_entity(morph=gs.morphs.Mesh(file=model, pos=(0.0, 0.0, 0.6), fixed=True))
 
@@ -51,7 +58,6 @@ def render(model):
         render_mode=getattr(npr.ERenderMode, MODES[0]), env_maps=(env_map,)))
     scene.build(n_envs=1)
 
-    name = os.path.splitext(os.path.basename(model))[0]
     os.makedirs(OUT_DIR, exist_ok=True)
     for i, mode in enumerate(MODES):
         if i > 0:
