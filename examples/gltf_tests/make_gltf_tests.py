@@ -103,6 +103,68 @@ def tex_bumps(n=128, cells=4, directx=False):
     return png(n, n, f)
 
 
+# High-resolution normal map built from a height field (test 06d) -------------------------------
+HIRES_NORMAL_SIZE = 1024   # texture size in pixels (square)
+
+
+def height_field_regions(n=HIRES_NORMAL_SIZE):
+    """Height field in pixel units, image split into 4 regions:
+    top-left: 3x3 raised domes        top-right: 3x3 sunken dents (same shape, inverted)
+    bottom-left: 3x3 raised pyramids  bottom-right: fine concentric ripples (detail / resolution)."""
+    half, cell = n // 2, n // 6
+    R = cell * 0.4                       # radius of domes / dents / pyramids
+    A = R * 0.4                          # their height -> max slope ~0.6 (~30 degrees)
+    ring = max(n / 64.0, 4.0)            # ripple wavelength in pixels
+    h = [[0.0] * n for _ in range(n)]
+    for y in range(n):
+        row = h[y]
+        for x in range(n):
+            if y < half or x < half:      # the three 3x3 grid regions (ripples are done below)
+                dx = (x % cell) - cell / 2 + 0.5
+                dy = (y % cell) - cell / 2 + 0.5
+                if y < half:              # domes (x < half) / dents (x >= half)
+                    r = math.hypot(dx, dy)
+                    v = A * math.cos(math.pi * r / (2 * R)) ** 2 if r < R else 0.0
+                    row[x] = v if x < half else -v
+                else:                     # pyramids, bottom-left
+                    m = max(abs(dx), abs(dy))
+                    row[x] = A * (1 - m / R) if m < R else 0.0
+        if y >= half:                     # ripples, bottom-right
+            for x in range(half, n):
+                dx, dy = x - half * 1.5 + 0.5, y - half * 1.5 + 0.5
+                r = math.hypot(dx, dy)
+                fade = max(0.0, 1 - r / (half * 0.48))
+                row[x] = ring / (2 * math.pi) * 0.6 * math.sin(2 * math.pi * r / ring) * fade
+    return h
+
+
+def tex_normal_from_height(h):
+    """OpenGL tangent-space normal map (green = up) from a height field, by central differences."""
+    n = len(h)
+
+    def f(x, y):
+        hx = (h[y][min(x + 1, n - 1)] - h[y][max(x - 1, 0)]) / 2
+        hy_up = (h[max(y - 1, 0)][x] - h[min(y + 1, n - 1)][x]) / 2   # image y goes down, glTF +Y is up
+        nx, ny, nz = -hx, -hy_up, 1.0
+        ln = math.sqrt(nx * nx + ny * ny + nz * nz)
+        return tuple(int(round((a / ln * 0.5 + 0.5) * 255)) for a in (nx, ny, nz))
+
+    return png(n, n, f)
+
+
+def tex_height_preview(h):
+    """The same height field as a grey colour image: low = dark, high = light (visual reference)."""
+    n = len(h)
+    lo = min(min(r) for r in h)
+    hi = max(max(r) for r in h)
+
+    def f(x, y):
+        v = int(round(40 + 200 * (h[y][x] - lo) / (hi - lo)))
+        return (v, v, v)
+
+    return png(n, n, f)
+
+
 # ---------------------------------------------------------------- geometry
 
 def sphere(r=0.5, seg=48, rings=24):
@@ -298,6 +360,24 @@ def normal_map_gl_scale_0_1_4(g):
     tex = g.texture(tex_bumps(), "normal_bumps_gl")
     g.row([g.mesh(sphere(), g.pbr(rough=0.8, normalTexture=dict(tex, scale=k)), tangents=True)
            for k in (0.0, 1.0, 10.0)])
+
+
+def normal_map_gl_1024_plane_vs_height_reference(g):
+    """High-resolution (1024x1024) OpenGL normal map on a flat plane facing the camera.
+    Left: grey plane with ONLY the normal map. Right: no normal map, the same height field shown
+    as a colour texture (light = high, dark = low): this is the shape the left plane must show.
+    Regions (both planes): top-left raised domes, top-right sunken dents, bottom-left raised
+    pyramids, bottom-right fine concentric ripples.
+    What to check on the left plane:
+    - domes and dents are lit from OPPOSITE sides (dents look like holes, not bumps);
+    - pyramids show 4 flat facets with uniform shading each, sharp diagonal edges;
+    - ripples are crisp rings, not blurry or blocky (texture resolution kept);
+    - any region looking inverted only up/down = green channel read the wrong way."""
+    h = height_field_regions()
+    nrm = g.texture(tex_normal_from_height(h), "normal_hires_gl")
+    ref = g.texture(tex_height_preview(h), "height_reference")
+    g.row([g.mesh(quad(1.1), g.pbr(rough=0.35, normalTexture=nrm), tangents=True),
+           g.mesh(quad(1.1), g.pbr((1, 1, 1, 1), rough=0.9, baseColorTexture=ref))], spacing=1.25)
 
 
 def emissive_none_factor_strength4_texture(g):
@@ -595,7 +675,7 @@ def combined_all_basic_features(g):
 
 TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_color_texture_quadrants,
          base_color_texture_on_sphere, (normal_map_gl_off_on_tangent_w_flip, normal_map_dx_off_on_tangent_w_flip,
-          normal_map_gl_scale_0_1_4),
+          normal_map_gl_scale_0_1_4, normal_map_gl_1024_plane_vs_height_reference),
          emissive_none_factor_strength4_texture, alpha_opaque_blend_mask,
          double_sided_on_off, node_transforms, axes_x_red_y_green_z_blue,
          anisotropy_strength_0_05_1, anisotropy_rotation_0_45_90, anisotropy_texture_h_v_checker,
