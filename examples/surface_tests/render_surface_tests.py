@@ -114,22 +114,61 @@ def Q(surface, turn=0.0):
 # gs.surfaces.Default is gs.surfaces.BSDF (color / metallic / roughness / opacity / emissive).
 # ---------------------------------------------------------------------------
 
+#
+# Test index (search for "# 07" etc. to jump to a test). The numbers are set in the TESTS
+# list at the bottom of the file; 01-23 match gltf_tests, 30+ are Genesis-only.
+#
+#   01   Base colour (color=)
+#   02   Metallic ramp
+#   03   Roughness ramp
+#   04   Diffuse texture: UV orientation (quad)
+#   05   Diffuse texture on a sphere
+#   06   Normal map off / on
+#   07   Emission: none / colour / colour x4 / texture
+#   08   Opacity ramp + alpha texture
+#   09   Double-sided vs single-sided (back faces)
+#   19   Roughness / metallic: values, ColorTextures, image textures
+#   23   All basic features together
+#   30   Surface presets: Plastic / Rough / Smooth / Reflective
+#   31   Metal presets 1: iron / aluminium / copper / gold
+#   32   Metal presets 2: brass / titanium / vanadium / lithium
+#   33   Metal preset with own colour / roughness
+#   34   Glass (clear, rough, IOR 1.2) and Water
+#   35   BSDF transmission: none / specular / diffuse
+#   36   Emission surface: colour / x4 / texture
+#   37   Same red 4 ways: value / ColorTexture / image / tinted image
+#   38   Texture from a file vs from a numpy array
+#   39   Opacity texture
+#
+
+# ================================================================================================
+# 01  | Base colour (color=)
+# ================================================================================================
 def base_color_red_green_blue(gs):
     """glTF 01. Metallic 0, roughness 0.5."""
     return [S(gs.surfaces.Default(color=c, metallic=0.0, roughness=0.5))
             for c in ((0.8, 0.05, 0.05), (0.05, 0.8, 0.05), (0.05, 0.05, 0.8))]
 
 
+# ================================================================================================
+# 02  | Metallic ramp
+# ================================================================================================
 def metallic_0_05_1(gs):
     """glTF 02. Gold, roughness 0.2, metallic 0 -> 0.5 -> 1."""
     return [S(gs.surfaces.Default(color=GOLD, metallic=m, roughness=0.2)) for m in (0.0, 0.5, 1.0)]
 
 
+# ================================================================================================
+# 03  | Roughness ramp
+# ================================================================================================
 def roughness_0_05_1(gs):
     """glTF 03. Gold, metallic 1, roughness 0 -> 0.5 -> 1."""
     return [S(gs.surfaces.Default(color=GOLD, metallic=1.0, roughness=r)) for r in (0.0, 0.5, 1.0)]
 
 
+# ================================================================================================
+# 04  | Diffuse texture: UV orientation (quad)
+# ================================================================================================
 def base_color_texture_quadrants(gs):
     """glTF 04. Quad facing the camera: top-left red, top-right green, bottom-left blue,
     bottom-right yellow."""
@@ -137,6 +176,9 @@ def base_color_texture_quadrants(gs):
                                   roughness=0.5))]
 
 
+# ================================================================================================
+# 05  | Diffuse texture on a sphere
+# ================================================================================================
 def base_color_texture_on_sphere(gs):
     """glTF 05. Checker texture on a sphere. The sphere is Nyx's built-in primitive, so its UV
     layout (and so the checker layout) may differ from the glTF sphere."""
@@ -144,6 +186,9 @@ def base_color_texture_on_sphere(gs):
                                   roughness=0.5))]
 
 
+# ================================================================================================
+# 06  | Normal map off / on
+# ================================================================================================
 def normal_map_off_on(gs):
     """glTF 06. Left: no normal map. Right: bump normal map (bumps should look convex)."""
     bumps = gs.textures.ImageTexture(image_path=tex("normal_bumps.png"), encoding="linear")
@@ -151,6 +196,9 @@ def normal_map_off_on(gs):
             S(gs.surfaces.Default(color=(0.8, 0.8, 0.8), roughness=0.3, normal_texture=bumps))]
 
 
+# ================================================================================================
+# 07  | Emission: none / colour / colour x4 / texture
+# ================================================================================================
 def emissive_none_orange_orange_x4_texture(gs):
     """glTF 07. Black base:
     1. no emission  2. emissive orange  3. emissive orange x 4 (Genesis has no strength parameter,
@@ -163,6 +211,9 @@ def emissive_none_orange_orange_x4_texture(gs):
             S(gs.surfaces.Default(color=(0, 0, 0), emissive_texture=stripes))]
 
 
+# ================================================================================================
+# 08  | Opacity ramp + alpha texture
+# ================================================================================================
 def opacity_1_06_03_alpha_texture(gs):
     """glTF 08 equivalent. Genesis has no alpha mode (OPAQUE / BLEND / MASK), only opacity.
     1-3: orange, opacity 1 -> 0.6 -> 0.3 (should get more and more see-through).
@@ -173,6 +224,9 @@ def opacity_1_06_03_alpha_texture(gs):
                                   roughness=0.5, double_sided=True))]
 
 
+# ================================================================================================
+# 09  | Double-sided vs single-sided (back faces)
+# ================================================================================================
 def double_sided_on_off(gs):
     """glTF 09. Two quads seen from the BACK: left double_sided=True (visible),
     right double_sided=False (culled, you should only see the ground behind)."""
@@ -181,6 +235,9 @@ def double_sided_on_off(gs):
             Q(gs.surfaces.Default(diffuse_texture=quad, double_sided=False), turn=180)]
 
 
+# ================================================================================================
+# 19  | Roughness / metallic: values, ColorTextures, image textures
+# ================================================================================================
 def rough_metal_values_colortextures_roughtex_metaltex(gs):
     """glTF 19/20 equivalent. Genesis has separate roughness_texture and metallic_texture
     (one channel each) instead of glTF's packed metallicRoughness texture.
@@ -200,6 +257,9 @@ def rough_metal_values_colortextures_roughtex_metaltex(gs):
                                                                   encoding="linear")))]
 
 
+# ================================================================================================
+# 23  | All basic features together
+# ================================================================================================
 def combined_all_basic_features(gs):
     """glTF 23 equivalent, using only what Genesis surfaces have.
     Left sphere and middle quad, same surface: checker colour texture, bump normal map,
@@ -220,6 +280,9 @@ def combined_all_basic_features(gs):
 # Genesis-only features (no glTF equivalent)
 # ---------------------------------------------------------------------------
 
+# ================================================================================================
+# 30  | Surface presets: Plastic / Rough / Smooth / Reflective
+# ================================================================================================
 def presets_plastic_rough_smooth_reflective(gs):
     """Same blue colour. Plastic (no roughness set), Rough (roughness 1, ior 1.5),
     Smooth (roughness 0.1, ior 1.5), Reflective (roughness 0.01, ior 2):
@@ -229,16 +292,25 @@ def presets_plastic_rough_smooth_reflective(gs):
                                         gs.surfaces.Smooth, gs.surfaces.Reflective)]
 
 
+# ================================================================================================
+# 31  | Metal presets 1: iron / aluminium / copper / gold
+# ================================================================================================
 def metals_iron_aluminium_copper_gold(gs):
     """Metal presets (roughness 0.1 by default): Iron, Aluminium, Copper, Gold."""
     return [S(cls()) for cls in (gs.surfaces.Iron, gs.surfaces.Aluminium, gs.surfaces.Copper, gs.surfaces.Gold)]
 
 
+# ================================================================================================
+# 32  | Metal presets 2: brass / titanium / vanadium / lithium
+# ================================================================================================
 def metals_brass_titanium_vanadium_lithium(gs):
     """The other metal_type values, through gs.surfaces.Metal(metal_type=...)."""
     return [S(gs.surfaces.Metal(metal_type=t)) for t in ("brass", "titanium", "vanadium", "lithium")]
 
 
+# ================================================================================================
+# 33  | Metal preset with own colour / roughness
+# ================================================================================================
 def metal_gold_red_color_rough05(gs):
     """1. Gold()  2. Gold(color=red): the colour should win -> red metal
     3. Gold(roughness=0.5): blurrier gold."""
@@ -247,6 +319,9 @@ def metal_gold_red_color_rough05(gs):
             S(gs.surfaces.Gold(roughness=0.5))]
 
 
+# ================================================================================================
+# 34  | Glass (clear, rough, IOR 1.2) and Water
+# ================================================================================================
 def glass_clear_rough_ior12_water(gs):
     """Glass(white), Glass(white, roughness 0.3), Glass(white, ior 1.2), Water().
     In Genesis these are transparent (refractive). Nyx has transmission / IOR, but the plugin
@@ -258,6 +333,9 @@ def glass_clear_rough_ior12_water(gs):
             S(gs.surfaces.Water())]
 
 
+# ================================================================================================
+# 35  | BSDF transmission: none / specular / diffuse
+# ================================================================================================
 def bsdf_trans_none_specular_diffuse(gs):
     """BSDF with specular_trans 0 / 1 / diffuse_trans 1 (same white-ish colour).
     2 should look like clear glass, 3 like frosted / translucent."""
@@ -267,6 +345,9 @@ def bsdf_trans_none_specular_diffuse(gs):
             S(gs.surfaces.BSDF(color=c, roughness=0.1, diffuse_trans=1.0))]
 
 
+# ================================================================================================
+# 36  | Emission surface: colour / x4 / texture
+# ================================================================================================
 def emission_surface_color_x4_texture(gs):
     """gs.surfaces.Emission (a light-emitting surface):
     1. Emission(color=orange)  2. Emission(emissive=orange x 4), brighter than 1
@@ -277,6 +358,9 @@ def emission_surface_color_x4_texture(gs):
                 image_path=tex("stripes.png"), image_color=ORANGE)))]
 
 
+# ================================================================================================
+# 37  | Same red 4 ways: value / ColorTexture / image / tinted image
+# ================================================================================================
 def color_value_colortex_imagetex_tinted(gs):
     """4 ways to say the same red in Genesis, all four should look identical:
     1. color=red  2. diffuse_texture=ColorTexture(red)  3. diffuse_texture = red 1x1 PNG
@@ -290,6 +374,9 @@ def color_value_colortex_imagetex_tinted(gs):
                                   roughness=0.5))]
 
 
+# ================================================================================================
+# 38  | Texture from a file vs from a numpy array
+# ================================================================================================
 def texture_from_file_vs_array(gs):
     """Same checker texture, left loaded from a PNG file (image_path), right given as a numpy
     array (image_array, no file). Both should look identical."""
@@ -301,6 +388,9 @@ def texture_from_file_vs_array(gs):
             S(gs.surfaces.Default(diffuse_texture=T.ImageTexture(image_array=arr), roughness=0.5))]
 
 
+# ================================================================================================
+# 39  | Opacity texture
+# ================================================================================================
 def opacity_texture_stripes(gs):
     """Orange plastic with an opacity_texture of horizontal stripes (opaque / fully transparent),
     double-sided: you should see through every other stripe. Left: same without opacity_texture."""
