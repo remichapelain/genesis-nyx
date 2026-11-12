@@ -267,9 +267,9 @@ def normal_map_gl_off_on_tangent_w_flip(g):
            up/down only. Must look IDENTICAL to the middle sphere of 06b, if the renderer uses
            the tangent w sign."""
     bumps = g.texture(tex_bumps(), "normal_bumps_gl")
-    g.row([g.mesh(sphere(), g.pbr(rough=0.3), tangents=True),
-           g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True),
-           g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
+    g.row([g.mesh(sphere(), g.pbr(rough=0.8), tangents=True),
+           g.mesh(sphere(), g.pbr(rough=0.8, normalTexture=bumps), tangents=True),
+           g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.8, normalTexture=bumps), tangents=True)])
 
 
 def normal_map_dx_off_on_tangent_w_flip(g):
@@ -283,9 +283,9 @@ def normal_map_dx_off_on_tangent_w_flip(g):
            green, so it must look IDENTICAL to the middle sphere of 06a, if the renderer uses the
            tangent w sign."""
     bumps = g.texture(tex_bumps(directx=True), "normal_bumps_dx")
-    g.row([g.mesh(sphere(), g.pbr(rough=0.3), tangents=True),
-           g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True),
-           g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
+    g.row([g.mesh(sphere(), g.pbr(rough=0.8), tangents=True),
+           g.mesh(sphere(), g.pbr(rough=0.8, normalTexture=bumps), tangents=True),
+           g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.8, normalTexture=bumps), tangents=True)])
 
 
 def normal_map_gl_scale_0_1_4(g):
@@ -296,8 +296,8 @@ def normal_map_gl_scale_0_1_4(g):
     Right: scale 4 -> much deeper bumps; strong shading on the bump edges. Path tracers may show
            dark rims there (very tilted normals), which is a known normal-map limitation."""
     tex = g.texture(tex_bumps(), "normal_bumps_gl")
-    g.row([g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=dict(tex, scale=k)), tangents=True)
-           for k in (0.0, 1.0, 4.0)])
+    g.row([g.mesh(sphere(), g.pbr(rough=0.8, normalTexture=dict(tex, scale=k)), tangents=True)
+           for k in (0.0, 1.0, 10.0)])
 
 
 def emissive_none_factor_strength4_texture(g):
