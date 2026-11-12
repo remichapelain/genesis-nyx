@@ -84,12 +84,16 @@ def tex_pixel_checker(n=PIXEL_CHECKER_SIZE):
     return png(n, n, lambda x, y: (255, 255, 255) if (x + y) % 2 else (0, 0, 0))
 
 
-def tex_bumps(n=128, cells=4):
-    """Tangent-space normal map with round bumps (glTF / OpenGL convention, +Y up)."""
+def tex_bumps(n=128, cells=4, directx=False):
+    """Tangent-space normal map with round bumps.
+    directx=False: OpenGL convention (green = +Y up), which is what glTF requires.
+    directx=True:  DirectX convention (green = +Y down), i.e. the green channel is inverted."""
     c = n / cells
 
     def f(x, y):
         dx, dy = (x % c) / c * 2 - 1, -((y % c) / c * 2 - 1)
+        if directx:
+            dy = -dy
         r2 = dx * dx + dy * dy
         nz = math.sqrt(0.64 - r2) if r2 < 0.64 else None
         v = (dx * 0.8, dy * 0.8, nz) if nz is not None else (0, 0, 1)
@@ -247,11 +251,53 @@ def base_color_texture_on_sphere(g):
     g.node(g.mesh(sphere(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_checker(), "checker"))))
 
 
-def normal_map_off_on(g):
-    """Left: no normal map. Right: bump normal map (bumps should look convex)."""
-    bumps = g.texture(tex_bumps(), "normal_bumps")
+def flip_tangent_w(geo):
+    """Same geometry with TANGENT.w = -1: the bitangent (normal-map green axis) points the other way."""
+    geo = dict(geo)
+    geo["tan"] = [(x, y, z, -w) for x, y, z, w in geo["tan"]]
+    return geo
+
+
+def normal_map_gl_off_on_tangent_w_flip(g):
+    """OpenGL normal map, the convention glTF requires (green = up). Same layout as 06b.
+    Left: no normal map.
+    Middle: GL map, normal tangents (w = +1) -> CORRECT: round convex bumps, lit consistently
+            (the side facing the light is bright both up/down and left/right).
+    Right: same GL map, but TANGENT.w = -1 (bitangent flipped) -> bumps lit from the wrong side
+           up/down only. Must look IDENTICAL to the middle sphere of 06b, if the renderer uses
+           the tangent w sign."""
+    bumps = g.texture(tex_bumps(), "normal_bumps_gl")
     g.row([g.mesh(sphere(), g.pbr(rough=0.3), tangents=True),
-           g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
+           g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True),
+           g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
+
+
+def normal_map_dx_off_on_tangent_w_flip(g):
+    """DirectX normal map (green inverted). glTF has NO field or extension to declare this:
+    the spec says normal maps are OpenGL, so a correct importer reads this map as if it were GL.
+    Left: no normal map.
+    Middle: DX map, normal tangents (w = +1) -> WRONG on purpose: the bumps still look right
+            left/right, but are lit from the wrong side up/down (they look like a bump horizontally
+            and a dent vertically). Compare with the middle sphere of 06a, and it must look IDENTICAL to the right sphere of 06a.
+    Right: same DX map, but TANGENT.w = -1, which flips the bitangent. That cancels the inverted
+           green, so it must look IDENTICAL to the middle sphere of 06a, if the renderer uses the
+           tangent w sign."""
+    bumps = g.texture(tex_bumps(directx=True), "normal_bumps_dx")
+    g.row([g.mesh(sphere(), g.pbr(rough=0.3), tangents=True),
+           g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=bumps), tangents=True),
+           g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.3, normalTexture=bumps), tangents=True)])
+
+
+def normal_map_gl_scale_0_1_4(g):
+    """Same OpenGL bump map on all three spheres, only normalTexture.scale changes
+    (it multiplies the X/Y tilt of the normals):
+    Left: scale 0 -> must look IDENTICAL to a sphere with no normal map (left of 06a / 06b).
+    Middle: scale 1 (the glTF default) -> must look IDENTICAL to the middle sphere of 06a.
+    Right: scale 4 -> much deeper bumps; strong shading on the bump edges. Path tracers may show
+           dark rims there (very tilted normals), which is a known normal-map limitation."""
+    tex = g.texture(tex_bumps(), "normal_bumps_gl")
+    g.row([g.mesh(sphere(), g.pbr(rough=0.3, normalTexture=dict(tex, scale=k)), tangents=True)
+           for k in (0.0, 1.0, 4.0)])
 
 
 def emissive_none_factor_strength4_texture(g):
@@ -548,7 +594,9 @@ def combined_all_basic_features(g):
 
 
 TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_color_texture_quadrants,
-         base_color_texture_on_sphere, normal_map_off_on, emissive_none_factor_strength4_texture, alpha_opaque_blend_mask,
+         base_color_texture_on_sphere, (normal_map_gl_off_on_tangent_w_flip, normal_map_dx_off_on_tangent_w_flip,
+          normal_map_gl_scale_0_1_4),
+         emissive_none_factor_strength4_texture, alpha_opaque_blend_mask,
          double_sided_on_off, node_transforms, axes_x_red_y_green_z_blue,
          anisotropy_strength_0_05_1, anisotropy_rotation_0_45_90, anisotropy_texture_h_v_checker,
          anisotropy_texture_blue_strength, anisotropy_with_without_tangents,
@@ -560,13 +608,16 @@ TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_colo
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    for i, test in enumerate(TESTS, 1):
-        name = "%02d_%s" % (i, test.__name__)
-        g = Gltf(name)
-        test(g)
-        path = os.path.join(OUT_DIR, name + ".glb")
-        g.save(path)
-        print("wrote", path)
+    for i, entry in enumerate(TESTS, 1):
+        # A tuple in TESTS = variants of one test, numbered 06a, 06b, ...
+        variants = [("", entry)] if callable(entry) else [(chr(ord("a") + k), t) for k, t in enumerate(entry)]
+        for suffix, test in variants:
+            name = "%02d%s_%s" % (i, suffix, test.__name__)
+            g = Gltf(name)
+            test(g)
+            path = os.path.join(OUT_DIR, name + ".glb")
+            g.save(path)
+            print("wrote", path)
 
 
 if __name__ == "__main__":
