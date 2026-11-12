@@ -287,27 +287,73 @@ class Gltf:
 
 
 # ---------------------------------------------------------------- the tests
+#
+# Test index (search for "# 06a" etc. to jump to a test). The numbers come from the order of
+# the TESTS list at the bottom of the file; keep this index and the banners in sync if you reorder.
+#
+#   01   Base colour factor (plain colours)
+#   02   Metallic factor ramp
+#   03   Roughness factor ramp
+#   04   Base colour texture: UV orientation
+#   05   Base colour texture on a curved surface
+#   06a  Normal map: OpenGL convention (glTF standard) + tangent w flip
+#   06b  Normal map: DirectX convention (green inverted) + tangent w flip
+#   06c  Normal map strength (normalTexture.scale)
+#   06d  Normal map: high-res 1024 on a plane, vs height reference
+#   07   Emission: factor, KHR_materials_emissive_strength, texture
+#   08   Alpha modes: OPAQUE / BLEND / MASK (cutoff)
+#   09   Double-sided vs single-sided (back faces)
+#   10   Node transforms: scale / rotation / translation
+#   11   Axis orientation (Y-up -> Z-up)
+#   12   Anisotropy strength
+#   13   Anisotropy rotation
+#   14   Anisotropy direction texture
+#   15   Anisotropy strength from texture (blue channel)
+#   16   Anisotropy with / without TANGENT attribute
+#   17   Sampler wrap modes
+#   18   Sampler filtering (magnification / mipmaps)
+#   19   Metallic-roughness texture vs factors (red ignored)
+#   20   Metallic-roughness texture channels (G = rough, B = metal)
+#   21   Occlusion texture strength
+#   22   Occlusion + metallic-roughness merge (Nyx ARM texture)
+#   23   All basic features together
+#
 # Each function fills a Gltf. The function name becomes the file / image name.
 
+# ================================================================================================
+# 01  | Base colour factor (plain colours)
+# ================================================================================================
 def base_color_red_green_blue(g):
     g.row([g.mesh(sphere(), g.pbr(c)) for c in ((0.8, 0.05, 0.05, 1), (0.05, 0.8, 0.05, 1), (0.05, 0.05, 0.8, 1))])
 
 
+# ================================================================================================
+# 02  | Metallic factor ramp
+# ================================================================================================
 def metallic_0_05_1(g):
     """Same roughness (0.2), metallic 0 -> 0.5 -> 1 left to right."""
     g.row([g.mesh(sphere(), g.pbr((1, 0.77, 0.34, 1), m, 0.2)) for m in (0.0, 0.5, 1.0)])
 
 
+# ================================================================================================
+# 03  | Roughness factor ramp
+# ================================================================================================
 def roughness_0_05_1(g):
     """Metallic 1, roughness 0 -> 0.5 -> 1 left to right."""
     g.row([g.mesh(sphere(), g.pbr((1, 0.77, 0.34, 1), 1.0, r)) for r in (0.0, 0.5, 1.0)])
 
 
+# ================================================================================================
+# 04  | Base colour texture: UV orientation
+# ================================================================================================
 def base_color_texture_quadrants(g):
     """Front-facing quad: top-left red, top-right green, bottom-left blue, bottom-right yellow."""
     g.node(g.mesh(quad(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_quadrants(), "quadrants"))))
 
 
+# ================================================================================================
+# 05  | Base colour texture on a curved surface
+# ================================================================================================
 def base_color_texture_on_sphere(g):
     """Checker texture on a sphere, plain white factor."""
     g.node(g.mesh(sphere(), g.pbr((1, 1, 1, 1), baseColorTexture=g.texture(tex_checker(), "checker"))))
@@ -320,6 +366,9 @@ def flip_tangent_w(geo):
     return geo
 
 
+# ================================================================================================
+# 06a | Normal map: OpenGL convention (glTF standard) + tangent w flip
+# ================================================================================================
 def normal_map_gl_off_on_tangent_w_flip(g):
     """OpenGL normal map, the convention glTF requires (green = up). Same layout as 06b.
     Left: no normal map.
@@ -334,6 +383,9 @@ def normal_map_gl_off_on_tangent_w_flip(g):
            g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.8, normalTexture=bumps), tangents=True)])
 
 
+# ================================================================================================
+# 06b | Normal map: DirectX convention (green inverted) + tangent w flip
+# ================================================================================================
 def normal_map_dx_off_on_tangent_w_flip(g):
     """DirectX normal map (green inverted). glTF has NO field or extension to declare this:
     the spec says normal maps are OpenGL, so a correct importer reads this map as if it were GL.
@@ -350,6 +402,9 @@ def normal_map_dx_off_on_tangent_w_flip(g):
            g.mesh(flip_tangent_w(sphere()), g.pbr(rough=0.8, normalTexture=bumps), tangents=True)])
 
 
+# ================================================================================================
+# 06c | Normal map strength (normalTexture.scale)
+# ================================================================================================
 def normal_map_gl_scale_0_1_4(g):
     """Same OpenGL bump map on all three spheres, only normalTexture.scale changes
     (it multiplies the X/Y tilt of the normals):
@@ -362,6 +417,9 @@ def normal_map_gl_scale_0_1_4(g):
            for k in (0.0, 1.0, 10.0)])
 
 
+# ================================================================================================
+# 06d | Normal map: high-res 1024 on a plane, vs height reference
+# ================================================================================================
 def normal_map_gl_1024_plane_vs_height_reference(g):
     """High-resolution (1024x1024) OpenGL normal map on a flat plane facing the camera.
     Left: grey plane with ONLY the normal map. Right: no normal map, the same height field shown
@@ -380,6 +438,9 @@ def normal_map_gl_1024_plane_vs_height_reference(g):
            g.mesh(quad(1.1), g.pbr((1, 1, 1, 1), rough=0.9, baseColorTexture=ref))], spacing=1.25)
 
 
+# ================================================================================================
+# 07  | Emission: factor, KHR_materials_emissive_strength, texture
+# ================================================================================================
 def emissive_none_factor_strength4_texture(g):
     """Black spheres, left to right:
     1. no emission
@@ -397,6 +458,9 @@ def emissive_none_factor_strength4_texture(g):
                                   emissiveTexture=g.texture(tex_stripes(), "emissive_stripes")))])
 
 
+# ================================================================================================
+# 08  | Alpha modes: OPAQUE / BLEND / MASK (cutoff)
+# ================================================================================================
 def alpha_opaque_blend_mask(g):
     """Left: alpha 0.3, OPAQUE (alpha ignored -> solid). Middle: alpha 0.3, BLEND (see-through).
     Right: MASK with the default alphaCutoff 0.5 and a checker texture whose alpha is 0.75 / 0.25:
@@ -410,6 +474,9 @@ def alpha_opaque_blend_mask(g):
            g.mesh(sphere(), mask)])
 
 
+# ================================================================================================
+# 09  | Double-sided vs single-sided (back faces)
+# ================================================================================================
 def double_sided_on_off(g):
     """Two quads seen from the BACK: left doubleSided (visible), right single-sided (culled)."""
     flip = [0, 1, 0, 0]  # 180 deg around Y
@@ -418,6 +485,9 @@ def double_sided_on_off(g):
     g.node(g.mesh(quad(), g.pbr(baseColorTexture=tex)), translation=[0.6, 0, 0], rotation=flip)
 
 
+# ================================================================================================
+# 10  | Node transforms: scale / rotation / translation
+# ================================================================================================
 def node_transforms(g):
     """Left: sphere squashed (scale y 0.5). Middle: cube rotated 45deg on Z. Right: cube translated up 0.3."""
     g.node(g.mesh(sphere(), g.pbr((0.1, 0.6, 0.6, 1))), translation=[-1.2, 0, 0], scale=[1, 0.5, 1])
@@ -426,6 +496,9 @@ def node_transforms(g):
     g.node(g.mesh(box(0.6, 0.6, 0.6), g.pbr((0.5, 0.2, 0.8, 1))), translation=[1.2, 0.3, 0])
 
 
+# ================================================================================================
+# 11  | Axis orientation (Y-up -> Z-up)
+# ================================================================================================
 def axes_x_red_y_green_z_blue(g):
     """glTF axes: red bar +X, green bar +Y (should point up), blue bar +Z (toward camera)."""
     for size, center, col in (((1, 0.1, 0.1), (0.5, 0, 0), (0.9, 0.05, 0.05, 1)),
@@ -458,6 +531,9 @@ def tex_ao_horizontal_bands(n=64, bands=8):
     return png(n, n, lambda x, y: (38, 255, 255) if (y * bands // n) % 2 == 0 else (255, 255, 255))
 
 
+# ================================================================================================
+# 19  | Metallic-roughness texture vs factors (red ignored)
+# ================================================================================================
 def metallic_roughness_texture_vs_factors(g):
     """Four gold spheres that must ALL LOOK IDENTICAL (polished metal: metallic 1, roughness 0.2):
     1. factors only (reference)
@@ -470,6 +546,9 @@ def metallic_roughness_texture_vs_factors(g):
            g.mesh(sphere(), g.pbr(GOLD, 1.0, 0.2, metallicRoughnessTexture=g.texture(tex_solid((255, 255, 255)), "mr_white")))])
 
 
+# ================================================================================================
+# 20  | Metallic-roughness texture channels (G = rough, B = metal)
+# ================================================================================================
 def metallic_roughness_texture_grid(g):
     """Quad + sphere with a 4x4 metallicRoughnessTexture: roughness increases left -> right,
     metalness increases top -> bottom. Top row = plastic, bottom row = gold metal; left column
@@ -478,6 +557,9 @@ def metallic_roughness_texture_grid(g):
     g.row([g.mesh(quad(), mat), g.mesh(sphere(), mat)])
 
 
+# ================================================================================================
+# 21  | Occlusion texture strength
+# ================================================================================================
 def occlusion_none_strength_0_05_1(g):
     """White matte spheres with an occlusionTexture of dark horizontal bands. Left to right:
     no occlusion texture, strength 0 (must equal no texture), strength 0.5 (light bands),
@@ -489,6 +571,9 @@ def occlusion_none_strength_0_05_1(g):
            for st in (0.0, 0.5, 1.0)])
 
 
+# ================================================================================================
+# 22  | Occlusion + metallic-roughness merge (Nyx ARM texture)
+# ================================================================================================
 def occlusion_and_mr_separate_packed_ao_only_mr_only(g):
     """How the importer merges glTF's two textures into Nyx's single ARM texture:
     1. SEPARATE images: MR = vertical bands (polished gold / satin plastic), AO = dark horizontal
@@ -513,6 +598,9 @@ def occlusion_and_mr_separate_packed_ao_only_mr_only(g):
 # glTF constants: wrap REPEAT 10497, CLAMP_TO_EDGE 33071, MIRRORED_REPEAT 33648,
 # filter NEAREST 9728, LINEAR 9729, LINEAR_MIPMAP_LINEAR 9987.
 
+# ================================================================================================
+# 17  | Sampler wrap modes
+# ================================================================================================
 def sampler_wrap_repeat_clamp_mirror_mixed(g):
     """Quadrant texture (top-left red, top-right green, bottom-left blue, bottom-right yellow)
     on quads whose UVs go 0..3, so the texture is tiled 3x3. Left to right:
@@ -528,6 +616,9 @@ def sampler_wrap_repeat_clamp_mirror_mixed(g):
     g.row([q(10497, 10497), q(33071, 33071), q(33648, 33648), q(10497, 33071)])
 
 
+# ================================================================================================
+# 18  | Sampler filtering (magnification / mipmaps)
+# ================================================================================================
 def sampler_filter_mag_nearest_linear_min_nearest_mipmap(g):
     """Left to right:
     1. 4x4 texel texture, magFilter NEAREST: crisp 4x4 grid of coloured squares.
@@ -565,12 +656,18 @@ def aniso_mat(g, strength=None, rotation=None, texture=None):
     return g.pbr((0.9, 0.9, 0.9, 1), 1.0, 0.2, extensions={"KHR_materials_anisotropy": ext})
 
 
+# ================================================================================================
+# 12  | Anisotropy strength
+# ================================================================================================
 def anisotropy_strength_0_05_1(g):
     """anisotropyStrength 0 / 0.5 / 1, rotation 0. Left = normal round reflections,
     then increasingly smeared HORIZONTALLY."""
     g.row([g.mesh(sphere(), aniso_mat(g, strength=st), tangents=True) for st in (0.0, 0.5, 1.0)])
 
 
+# ================================================================================================
+# 13  | Anisotropy rotation
+# ================================================================================================
 def anisotropy_rotation_0_45_90(g):
     """anisotropyStrength 1, rotation 0 / 45 / 90 deg. Smear direction turns from
     horizontal, to diagonal, to vertical. Left must match the right sphere of 12."""
@@ -578,6 +675,9 @@ def anisotropy_rotation_0_45_90(g):
            for a in (0, 45, 90)])
 
 
+# ================================================================================================
+# 14  | Anisotropy direction texture
+# ================================================================================================
 def anisotropy_texture_h_v_checker(g):
     """anisotropyStrength 1 + anisotropyTexture. Left: texture direction = tangent (must match
     12 right). Middle: direction = bitangent (must match 13 right, vertical). Right: checker
@@ -587,6 +687,9 @@ def anisotropy_texture_h_v_checker(g):
            g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_aniso_checker(), "aniso_checker")), tangents=True)])
 
 
+# ================================================================================================
+# 15  | Anisotropy strength from texture (blue channel)
+# ================================================================================================
 def anisotropy_texture_blue_strength(g):
     """Texture BLUE channel multiplies anisotropyStrength (direction = tangent everywhere).
     Left: factor 1 x blue 0.5. Middle: factor 0.5 x blue 1. Right: factor 1 x blue 0.
@@ -596,6 +699,9 @@ def anisotropy_texture_blue_strength(g):
            g.mesh(sphere(), aniso_mat(g, strength=1.0, texture=g.texture(tex_solid((255, 128, 0)), "aniso_blue_zero")), tangents=True)])
 
 
+# ================================================================================================
+# 16  | Anisotropy with / without TANGENT attribute
+# ================================================================================================
 def anisotropy_with_without_tangents(g):
     """anisotropyStrength 1, rotation 0. Left: mesh HAS a TANGENT attribute. Right: no TANGENT,
     the importer must generate tangents from the UVs. Both must look the same (horizontal smear)."""
@@ -630,6 +736,9 @@ def tex_combined_emissive(n=128):
     return png(n, n, lambda x, y: (255, 255, 255) if 0.2 <= y / n < 0.27 else (0, 0, 0))
 
 
+# ================================================================================================
+# 23  | All basic features together
+# ================================================================================================
 def combined_all_basic_features(g):
     """Everything from the single-feature tests at once. Each texture drives a different region
     so every feature stays readable:
