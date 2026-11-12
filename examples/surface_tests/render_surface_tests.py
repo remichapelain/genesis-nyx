@@ -125,7 +125,7 @@ def Q(surface, turn=0.0):
 #   05   Diffuse texture on a sphere
 #   06   Normal map off / on
 #   07   Emission: none / colour / colour x4 / texture
-#   08   Opacity ramp + alpha texture
+#   08   Opacity: opaque / 0.3 / alpha checker (threshold 0.5?)
 #   09   Double-sided vs single-sided (back faces)
 #   19   Roughness / metallic: values, ColorTextures, image textures
 #   23   All basic features together
@@ -212,14 +212,22 @@ def emissive_none_orange_orange_x4_texture(gs):
 
 
 # ================================================================================================
-# 08  | Opacity ramp + alpha texture
+# 08  | Opacity: opaque / 0.3 / alpha checker (threshold 0.5?)
 # ================================================================================================
-def opacity_1_06_03_alpha_texture(gs):
-    """glTF 08 equivalent. Genesis has no alpha mode (OPAQUE / BLEND / MASK), only opacity.
-    1-3: orange, opacity 1 -> 0.6 -> 0.3 (should get more and more see-through).
-    4: diffuse texture with alpha 0.75 / 0.25 checker (Genesis takes opacity from the texture
-       alpha), double-sided: 0.25 cells should be much more see-through than 0.75 cells."""
-    return [*(S(gs.surfaces.Default(color=ORANGE, opacity=a, roughness=0.5)) for a in (1.0, 0.6, 0.3)),
+def opacity_1_03_alpha_checker(gs):
+    """glTF 08 equivalent. Genesis has no alpha mode (OPAQUE / BLEND / MASK) and NO alpha threshold
+    (cutoff) setting on surfaces, only opacity. Nyx does support alpha clipping (EMaterialClipping.On
+    + cutOff), but the plugin never enables it. Left to right:
+    1. orange, opacity 1 -> fully solid.
+    2. orange, opacity 0.3 -> see-through.
+    3. orange checker texture whose alpha is 0.75 / 0.25 (on either side of a 0.5 threshold),
+       double-sided:
+       - 0.75 cells fully SOLID, 0.25 cells fully CUT OUT -> a 0.5 threshold is applied (MASK-like);
+       - 0.75 cells slightly see-through, 0.25 cells very see-through -> alpha is blended, no threshold
+         (expected from the plugin code, since Genesis can't ask for one);
+       - fully solid sphere -> the texture alpha is ignored."""
+    return [S(gs.surfaces.Default(color=ORANGE, opacity=1.0, roughness=0.5)),
+            S(gs.surfaces.Default(color=ORANGE, opacity=0.3, roughness=0.5)),
             S(gs.surfaces.Default(diffuse_texture=gs.textures.ImageTexture(image_path=tex("alpha_checker.png")),
                                   roughness=0.5, double_sided=True))]
 
@@ -411,7 +419,7 @@ TESTS = [
     ("05_base_color_texture_on_sphere",                      base_color_texture_on_sphere),
     ("06_normal_map_off_on",                                 normal_map_off_on),
     ("07_emissive_none_orange_orange_x4_texture",            emissive_none_orange_orange_x4_texture),
-    ("08_opacity_1_06_03_alpha_texture",                     opacity_1_06_03_alpha_texture),
+    ("08_opacity_1_03_alpha_checker",                         opacity_1_03_alpha_checker),
     ("09_double_sided_on_off",                               double_sided_on_off),
     ("19_rough_metal_values_colortextures_roughtex_metaltex", rough_metal_values_colortextures_roughtex_metaltex),
     ("23_combined_all_basic_features",                       combined_all_basic_features),
