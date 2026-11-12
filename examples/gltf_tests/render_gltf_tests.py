@@ -32,6 +32,20 @@ CAM_FOV    = 30.0
 # which makes subtle shading (normal maps) harder to compare between modes. Empty it to restore.
 NO_GROUND_TESTS = ("06",)
 
+# Extra Nyx lights added on top of the environment map, per test (matched on the start of the
+# file name). Same dict format as NyxCameraOptions(lights=...), in Genesis Z-up coordinates
+# (camera looks along +Y). Forward mode doesn't apply anisotropy to the environment map, only to
+# lights, so the anisotropy tests need a light to show the effect in Forward.
+KEY_LIGHT = {
+    "type":      "directional",
+    "dir":       (0.5, 0.6, -0.6),   # from the upper-left front -> highlight on the upper-left of each sphere
+    "color":     (1.0, 1.0, 1.0),
+    "intensity": 3.0,
+}
+EXTRA_LIGHTS = {
+    "12": [KEY_LIGHT],
+}
+
 
 def render(model):
     import genesis as gs
@@ -53,9 +67,10 @@ def render(model):
     env_map.layout     = nps.EEnvMapLayout.LongLat
     env_map.multiplier = 2
 
+    lights = [l for prefix, ls in EXTRA_LIGHTS.items() if name.startswith(prefix) for l in ls]
     cam = scene.add_sensor(NyxCameraOptions(
         res=CAM_RES, pos=CAM_POS, lookat=CAM_LOOKAT, fov=CAM_FOV, spp=64,
-        render_mode=getattr(npr.ERenderMode, MODES[0]), env_maps=(env_map,)))
+        render_mode=getattr(npr.ERenderMode, MODES[0]), env_maps=(env_map,), lights=lights))
     scene.build(n_envs=1)
 
     os.makedirs(OUT_DIR, exist_ok=True)
