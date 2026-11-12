@@ -30,7 +30,7 @@ CAM_FOV    = 30.0
 # Tests rendered WITHOUT the ground plane (matched on the start of the file name).
 # The ground adds bounced light and reflections in the path tracers that Forward doesn't have,
 # which makes subtle shading (normal maps) harder to compare between modes. Empty it to restore.
-NO_GROUND_TESTS = ("06",)
+NO_GROUND_TESTS = ("06", "18b")
 
 # Extra Nyx lights added on top of the environment map, per test (matched on the start of the
 # file name). Same dict format as NyxCameraOptions(lights=...), in Genesis Z-up coordinates
@@ -44,6 +44,7 @@ KEY_LIGHT = {
 }
 EXTRA_LIGHTS = {
     "12": [KEY_LIGHT],
+    "16": [KEY_LIGHT],
 }
 
 

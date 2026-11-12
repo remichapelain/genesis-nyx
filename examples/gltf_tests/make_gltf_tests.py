@@ -165,6 +165,12 @@ def tex_height_preview(h):
     return png(n, n, f)
 
 
+
+def tex_grazing_checker(n=64, cell=4):
+    """Black/white checker, `cell` x `cell` texels per square (test 18b). n=64 -> 16 squares
+    (power of two); n=48 -> 12 squares (NOT a power of two)."""
+    return png(n, n, lambda x, y: (235, 235, 235) if (x // cell + y // cell) % 2 else (20, 20, 20))
+
 # ---------------------------------------------------------------- geometry
 
 def sphere(r=0.5, seg=48, rings=24):
@@ -189,6 +195,15 @@ def quad(size=1.0, uv_scale=1.0):
     return dict(pos=[(-h, -h, 0), (h, -h, 0), (h, h, 0), (-h, h, 0)], nrm=[(0, 0, 1)] * 4,
                 uv=[(0, s), (s, s), (s, 0), (0, 0)], tan=[(1, 0, 0, 1)] * 4, idx=[0, 1, 2, 0, 2, 3])
 
+
+
+def floor_strip(width, z_near, z_far, u_tiles, v_tiles):
+    """Horizontal strip (normal +Y) from z_near (close to the camera) to z_far (far away).
+    The texture repeats u_tiles times across and v_tiles times along the strip."""
+    h = width / 2
+    return dict(pos=[(-h, 0, z_near), (h, 0, z_near), (h, 0, z_far), (-h, 0, z_far)], nrm=[(0, 1, 0)] * 4,
+                uv=[(0, 0), (u_tiles, 0), (u_tiles, v_tiles), (0, v_tiles)],
+                tan=[(1, 0, 0, 1)] * 4, idx=[0, 1, 2, 0, 2, 3])
 
 def box(sx, sy, sz, center=(0, 0, 0)):
     pos, nrm, idx = [], [], []
@@ -309,9 +324,10 @@ class Gltf:
 #   13   Anisotropy rotation
 #   14   Anisotropy direction texture
 #   15   Anisotropy strength from texture (blue channel)
-#   16   Anisotropy with / without TANGENT attribute
+#   16   Anisotropy: TANGENT given / missing / funky (kept or recalculated?)
 #   17   Sampler wrap modes
-#   18   Sampler filtering (magnification / mipmaps)
+#   18a  Sampler filtering (magnification / mipmaps)
+#   18b  Mipmapping at a grazing angle (minFilter modes, default sampler, NPOT texture)
 #   19   Metallic-roughness texture vs factors (red ignored)
 #   20   Metallic-roughness texture channels (G = rough, B = metal)
 #   21   Occlusion texture strength
@@ -617,7 +633,7 @@ def sampler_wrap_repeat_clamp_mirror_mixed(g):
 
 
 # ================================================================================================
-# 18  | Sampler filtering (magnification / mipmaps)
+# 18a | Sampler filtering (magnification / mipmaps)
 # ================================================================================================
 def sampler_filter_mag_nearest_linear_min_nearest_mipmap(g):
     """Left to right:
@@ -634,6 +650,45 @@ def sampler_filter_mag_nearest_linear_min_nearest_mipmap(g):
            q(tex_tiny_4x4(), "tiny_4x4", 9729, 9729),
            q(tex_pixel_checker(), "pixel_checker", 9729, 9728),
            q(tex_pixel_checker(), "pixel_checker", 9729, 9987)])
+
+
+# ================================================================================================
+# 18b | Mipmapping at a grazing angle (minFilter modes, default sampler, NPOT texture)
+# ================================================================================================
+def mipmaps_grazing_point_bilinear_trilinear_default_npot_mipbands(g):
+    """Six long floor strips going away from the camera (grazing angle), all with the same
+    black/white checker (4x4 texels per square, ~3 screen pixels per texel at the near end).
+    glTF has no "generate mipmaps" flag: mipmaps are requested through sampler.minFilter, and the
+    importer must build them (PNG/JPEG can't store mips). Left to right:
+    1. POINT, no mips (mag NEAREST, min NEAREST): sharp squares near, heavy aliasing / moire far.
+    2. BILINEAR, no mips (mag LINEAR, min LINEAR): soft edges near, still aliasing / moire far.
+    3. TRILINEAR (mag LINEAR, min LINEAR_MIPMAP_LINEAR): soft near, fades smoothly to flat grey far.
+    4. NO SAMPLER at all: the importer picks the filtering. Should look like 3 (mipmapped).
+    5. TRILINEAR on a 48x48 texture (NOT a power of two, same square size): must look like 3.
+       If it aliases like 2, the importer skips mip generation for non-power-of-two textures.
+    6. min NEAREST_MIPMAP_NEAREST: no blending between mip levels, so visible BANDS where the
+       mip level changes (shows that mips exist and how many levels there are).
+    Compare in Forward: the path tracers average many samples per pixel, which hides aliasing.
+    Trilinear going grey quickly in the distance is expected without anisotropic filtering
+    (glTF has no setting for that; it's up to the renderer)."""
+    width, gap, z_near, z_far = 0.5, 0.08, 2.0, -40.0
+    v_tiles = (z_near - z_far) / width            # keep the squares square
+    rep = {"wrapS": 10497, "wrapT": 10497}
+    strips = [  # (texture size, sampler or None)
+        (64, dict(rep, magFilter=9728, minFilter=9728)),   # NEAREST / NEAREST
+        (64, dict(rep, magFilter=9729, minFilter=9729)),   # LINEAR / LINEAR
+        (64, dict(rep, magFilter=9729, minFilter=9987)),   # LINEAR / LINEAR_MIPMAP_LINEAR
+        (64, None),                                        # no sampler -> importer default
+        (48, dict(rep, magFilter=9729, minFilter=9987)),   # NPOT, trilinear
+        (64, dict(rep, magFilter=9729, minFilter=9984)),   # LINEAR / NEAREST_MIPMAP_NEAREST
+    ]
+    for i, (size, smp) in enumerate(strips):
+        tex = g.texture(tex_grazing_checker(size), "checker_%d_strip%d" % (size, i + 1), sampler=smp)
+        k = 64 / size                                 # same square size on every strip
+        mesh = g.mesh(floor_strip(width, z_near, z_far, k, v_tiles * k),
+                      g.pbr((1, 1, 1, 1), rough=1.0, baseColorTexture=tex))
+        x = (i - (len(strips) - 1) / 2) * (width + gap)
+        g.node(mesh, translation=[x, -0.55, 0])        # just above the ground level of the render script
 
 
 # ---- KHR_materials_anisotropy -----------------------------------------------------
@@ -700,13 +755,35 @@ def anisotropy_texture_blue_strength(g):
 
 
 # ================================================================================================
-# 16  | Anisotropy with / without TANGENT attribute
+# 16  | Anisotropy: TANGENT given / missing / funky (are file tangents kept or recalculated?)
 # ================================================================================================
-def anisotropy_with_without_tangents(g):
-    """anisotropyStrength 1, rotation 0. Left: mesh HAS a TANGENT attribute. Right: no TANGENT,
-    the importer must generate tangents from the UVs. Both must look the same (horizontal smear)."""
+def funky_tangents(geo):
+    """Same sphere, but in the TOP half the tangents are turned 90 degrees around the normal: they
+    point along the meridians (vertical) instead of around the sphere. The bottom half keeps the
+    normal tangents. A tangent recalculation from the UVs can never produce this."""
+    geo = dict(geo)
+    tan = []
+    for (x, y, z), t in zip(geo["nrm"], geo["tan"]):
+        if y > 1e-6:                                  # top half (glTF +Y is up)
+            th, ph = math.acos(max(-1.0, min(1.0, y))), math.atan2(x, z)
+            t = (math.cos(th) * math.sin(ph), -math.sin(th), math.cos(th) * math.cos(ph), 1)
+        tan.append(t)
+    geo["tan"] = tan
+    return geo
+
+
+def anisotropy_tangents_given_none_funky(g):
+    """anisotropyStrength 1, rotation 0 (stretch along the tangent). Left to right:
+    1. mesh HAS a normal TANGENT attribute -> horizontal smear.
+    2. NO TANGENT attribute, the importer must generate it -> must look like 1.
+    3. FUNKY TANGENT attribute: top half tangents vertical, bottom half normal.
+       - top half smeared VERTICALLY, bottom half horizontally -> the file's tangents are KEPT;
+       - whole sphere horizontal, identical to 1 -> the tangents are RECALCULATED (file ignored).
+    Render with a light (see EXTRA_LIGHTS in render_gltf_tests.py): Forward only shows anisotropy
+    on lights, not on the environment map."""
     g.row([g.mesh(sphere(), aniso_mat(g, strength=1.0), tangents=True),
-           g.mesh(sphere(), aniso_mat(g, strength=1.0), tangents=False)])
+           g.mesh(sphere(), aniso_mat(g, strength=1.0), tangents=False),
+           g.mesh(funky_tangents(sphere()), aniso_mat(g, strength=1.0), tangents=True)])
 
 
 # ---- everything together -------------------------------------------------------------
@@ -788,8 +865,10 @@ TESTS = [base_color_red_green_blue, metallic_0_05_1, roughness_0_05_1, base_colo
          emissive_none_factor_strength4_texture, alpha_opaque_blend_mask,
          double_sided_on_off, node_transforms, axes_x_red_y_green_z_blue,
          anisotropy_strength_0_05_1, anisotropy_rotation_0_45_90, anisotropy_texture_h_v_checker,
-         anisotropy_texture_blue_strength, anisotropy_with_without_tangents,
-         sampler_wrap_repeat_clamp_mirror_mixed, sampler_filter_mag_nearest_linear_min_nearest_mipmap,
+         anisotropy_texture_blue_strength, anisotropy_tangents_given_none_funky,
+         sampler_wrap_repeat_clamp_mirror_mixed,
+         (sampler_filter_mag_nearest_linear_min_nearest_mipmap,
+          mipmaps_grazing_point_bilinear_trilinear_default_npot_mipbands),
          metallic_roughness_texture_vs_factors, metallic_roughness_texture_grid,
          occlusion_none_strength_0_05_1, occlusion_and_mr_separate_packed_ao_only_mr_only,
          combined_all_basic_features]
