@@ -471,7 +471,7 @@ def emissive_none_factor_strength4_texture(g):
            g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange,
                                   extensions={"KHR_materials_emissive_strength": {"emissiveStrength": 4.0}})),
            g.mesh(sphere(), g.pbr((0, 0, 0, 1), emissiveFactor=orange,
-                                  emissiveTexture=g.texture(tex_stripes(), "emissive_stripes")))])
+                                  emissiveTexture=g.texture(tex_stripes(), "emissive_stripes"), extensions={"KHR_materials_emissive_strength": {"emissiveStrength": 4.0}}))])
 
 
 # ================================================================================================
