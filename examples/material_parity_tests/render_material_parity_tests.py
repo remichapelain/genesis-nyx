@@ -460,9 +460,9 @@ def refraction_mode_columns(geo, thickness, turn=0.0):
     return [column(False, False), column(False, True), column(True, False), column(True, True)]
 
 
-REFRACTION_MODE_CAPTIONS_QUAD = ["single-sided - no thickness\nthin", "single-sided - thickness\nthin", "double-sided - no thickness\nthin", "double-sided - thickness\nthick"]
-REFRACTION_MODE_CAPTIONS_BOX = ["single-sided - no thickness\nthin", "single-sided - thickness\nmesh", "double-sided - no thickness\nthin", "double-sided\nthickness\nthick"]
-REFRACTION_MODE_CAPTIONS_SPHERE = ["single-sided - no thickness\nthin", "single-sided - thickness\nmesh", "double-sided - no thickness\nthin", "double-sided\nthickness\nthick"]
+REFRACTION_MODE_CAPTIONS_QUAD = ["single-sided - no thickness\nThin", "single-sided - thickness\nThin", "double-sided - no thickness\nThin", "double-sided - thickness\nThick"]
+REFRACTION_MODE_CAPTIONS_BOX = ["single-sided - no thickness\nThin", "single-sided - thickness\nVolume", "double-sided - no thickness\nThin", "double-sided\nthickness\nThick"]
+REFRACTION_MODE_CAPTIONS_SPHERE = ["single-sided - no thickness\nThin", "single-sided - thickness\nVolume", "double-sided - no thickness\nThin", "double-sided\nthickness\nThick"]
 
 
 # ================================================================================================
