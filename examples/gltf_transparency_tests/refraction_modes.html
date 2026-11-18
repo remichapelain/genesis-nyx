@@ -1,0 +1,188 @@
+<title>Nyx Refraction Modes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column, the flowchart first, then the same rule as a shape-by-setting grid. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #1a2230; --muted: #5a6577; --line: #cfd5de;
+  --thin-bg: #e4e8ee; --thin-fg: #323c4d;
+  --thick-bg: #fbe3b8; --thick-fg: #6b4300;
+  --mesh-bg: #c8ece6; --mesh-fg: #0b4f47;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a202a; --fg: #e6eaf0; --muted: #9aa5b6; --line: #364050;
+    --thin-bg: #2d3644; --thin-fg: #d5dbe5;
+    --thick-bg: #5a3f0c; --thick-fg: #ffdc9a;
+    --mesh-bg: #0f4a44; --mesh-fg: #b4efe6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a202a; --fg: #e6eaf0; --muted: #9aa5b6; --line: #364050;
+  --thin-bg: #2d3644; --thin-fg: #d5dbe5;
+  --thick-bg: #5a3f0c; --thick-fg: #ffdc9a;
+  --mesh-bg: #0f4a44; --mesh-fg: #b4efe6;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-block: 32px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; }
+h1 { font-size: 28px; }
+h2 { font-size: 19px; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 12px; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+figcaption, .note { color: var(--muted); font-size: 13.5px; max-width: 72ch; }
+svg { display: block; min-width: 720px; width: 100%; height: auto; color: var(--fg); font-family: var(--body); }
+.q { fill: var(--surface); stroke: var(--fg); stroke-width: 1.3; }
+.edge { stroke: currentColor; stroke-width: 1.3; fill: none; }
+.lbl { font-size: 12px; fill: var(--muted); }
+.qt { font-size: 13px; fill: var(--fg); text-anchor: middle; }
+.rt { font-size: 14px; font-weight: 600; text-anchor: middle; letter-spacing: 0.04em; }
+.rs { font-size: 11.5px; text-anchor: middle; }
+.thin { fill: var(--thin-bg); } .thin-t { fill: var(--thin-fg); }
+.thick { fill: var(--thick-bg); } .thick-t { fill: var(--thick-fg); }
+.mesh { fill: var(--mesh-bg); } .mesh-t { fill: var(--mesh-fg); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-variant-numeric: tabular-nums; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td, tr:last-child th { border-bottom: 0; }
+thead th { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+tbody th { font-weight: 600; }
+tbody th span { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+.pill.thin { background: var(--thin-bg); color: var(--thin-fg); }
+.pill.thick { background: var(--thick-bg); color: var(--thick-fg); }
+.pill.mesh { background: var(--mesh-bg); color: var(--mesh-fg); }
+td small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; }
+dt { margin: 0; } dd { margin: 0; min-width: 0; }
+</style>
+
+<main>
+  <header>
+    <h1>Nyx refraction modes</h1>
+    <p class="lede">How a transmissive glTF material is refracted in Nyx's Forward mode, from its thickness and its sidedness. The shape of the mesh is never tested directly.</p>
+  </header>
+
+  <section>
+    <h2>Decision</h2>
+    <figure>
+      <div class="scroll">
+        <svg viewBox="0 0 880 290" role="img" aria-label="Flowchart: thickness zero gives thin; with a thickness, double-sided gives thick; single-sided traces an exit ray, which gives mesh when it hits the same mesh and thin otherwise.">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 L10 5 L0 10 Z" fill="currentColor"></path>
+            </marker>
+          </defs>
+
+          <line class="edge" x1="10" y1="60" x2="60" y2="60" marker-end="url(#arrow)"></line>
+
+          <rect class="q" x="60" y="30" width="190" height="60" rx="8"></rect>
+          <text class="qt" x="155" y="56">thicknessFactor</text>
+          <text class="qt" x="155" y="74">above 0?</text>
+
+          <rect class="q" x="320" y="30" width="190" height="60" rx="8"></rect>
+          <text class="qt" x="415" y="65">doubleSided?</text>
+
+          <rect class="q" x="580" y="30" width="220" height="60" rx="8"></rect>
+          <text class="qt" x="690" y="56">exit ray hits</text>
+          <text class="qt" x="690" y="74">the same mesh?</text>
+
+          <line class="edge" x1="250" y1="60" x2="320" y2="60" marker-end="url(#arrow)"></line>
+          <text class="lbl" x="285" y="52" text-anchor="middle">yes</text>
+          <line class="edge" x1="510" y1="60" x2="580" y2="60" marker-end="url(#arrow)"></line>
+          <text class="lbl" x="545" y="52" text-anchor="middle">no</text>
+
+          <line class="edge" x1="155" y1="90" x2="155" y2="180" marker-end="url(#arrow)"></line>
+          <text class="lbl" x="163" y="140">no</text>
+          <line class="edge" x1="415" y1="90" x2="415" y2="180" marker-end="url(#arrow)"></line>
+          <text class="lbl" x="423" y="140">yes</text>
+          <line class="edge" x1="635" y1="90" x2="635" y2="180" marker-end="url(#arrow)"></line>
+          <text class="lbl" x="643" y="140">yes</text>
+          <line class="edge" x1="790" y1="90" x2="790" y2="180" marker-end="url(#arrow)"></line>
+          <text class="lbl" x="782" y="140" text-anchor="end">no</text>
+
+          <rect class="thin" x="85" y="180" width="140" height="80" rx="8"></rect>
+          <text class="rt thin-t" x="155" y="214">THIN</text>
+          <text class="rs thin-t" x="155" y="236">no bending</text>
+
+          <rect class="thick" x="345" y="180" width="140" height="80" rx="8"></rect>
+          <text class="rt thick-t" x="415" y="214">THICK</text>
+          <text class="rs thick-t" x="415" y="236">slab from the value</text>
+
+          <rect class="mesh" x="565" y="180" width="140" height="80" rx="8"></rect>
+          <text class="rt mesh-t" x="635" y="214">MESH</text>
+          <text class="rs mesh-t" x="635" y="236">exit on the geometry</text>
+
+          <rect class="thin" x="720" y="180" width="140" height="80" rx="8"></rect>
+          <text class="rt thin-t" x="790" y="214">THIN</text>
+          <text class="rs thin-t" x="790" y="236">fallback, absorbs</text>
+        </svg>
+      </div>
+      <figcaption>The exit ray is only traced for single-sided materials with a thickness. A double-sided material never looks at the mesh, even when the mesh is closed.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What each mode does</h2>
+    <dl>
+      <dt><span class="pill thin">Thin</span></dt>
+      <dd>The background is seen straight through, at its real place. IOR only sets the reflection strength. No absorption, except in the fallback case, which absorbs over the thickness value.</dd>
+      <dt><span class="pill thick">Thick</span></dt>
+      <dd>The surface is treated as a flat slab. The exit point is computed from the thickness value and the light leaves in its original direction, so the background is shifted sideways. On a curved surface this gives a distorted image, not a lens.</dd>
+      <dt><span class="pill mesh">Mesh</span></dt>
+      <dd>The light is refracted in, a ray finds the real exit face, and the light is refracted out with that face's normal. The thickness value only switches the mode on; the distance comes from the geometry.</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>Result by shape</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Shape</th>
+            <th scope="col">Single-sided, no thickness</th>
+            <th scope="col">Single-sided, thickness</th>
+            <th scope="col">Double-sided, no thickness</th>
+            <th scope="col">Double-sided, thickness</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Quad <span>open sheet</span></th>
+            <td><span class="pill thin">Thin</span></td>
+            <td><span class="pill thin">Thin</span><small>Fallback: no exit face. Test 08b, object 4.</small></td>
+            <td><span class="pill thin">Thin</span><small>The panes of tests 14 and 15.</small></td>
+            <td><span class="pill thick">Thick</span><small>Background shifted. Tests 08a and 08b, object 3.</small></td>
+          </tr>
+          <tr>
+            <th scope="row">Box <span>closed, flat faces</span></th>
+            <td><span class="pill thin">Thin</span></td>
+            <td><span class="pill mesh">Mesh</span><small>Background shifted. Test 08a, object 4.</small></td>
+            <td><span class="pill thin">Thin</span></td>
+            <td><span class="pill thick">Thick</span><small>Each face is its own slab.</small></td>
+          </tr>
+          <tr>
+            <th scope="row">Sphere <span>closed, curved</span></th>
+            <td><span class="pill thin">Thin</span><small>Test 08a, object 1.</small></td>
+            <td><span class="pill mesh">Mesh</span><small>Background flipped, lens. Tests 08a and 08b.</small></td>
+            <td><span class="pill thin">Thin</span></td>
+            <td><span class="pill thick">Thick</span><small>Distorted, not a lens. Test 08b, object 2.</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Cells that name a test were rendered in Forward mode. The others follow from the shader code (<code>transparency/shade.compute</code>) and have not been rendered. For the single-sided quad with a thickness, the render differs from the slab but does not clearly show an unshifted background.</p>
+  </section>
+</main>
