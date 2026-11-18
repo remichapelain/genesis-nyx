@@ -59,7 +59,8 @@ TEXTURES = {
     "alpha_checker.png":   tex_alpha_checker,
     "stripes.png":         tex_stripes,
     "normal_bumps.png":    tex_bumps,
-    "solid_red.png":       lambda: tex_solid((204, 13, 13)),
+    # sRGB-encoded (0.8, 0.05, 0.05): image textures are decoded from sRGB, colour values are linear.
+    "solid_red.png":       lambda: tex_solid((231, 63, 63)),
     "solid_white.png":     lambda: tex_solid((255, 255, 255)),
     "rough_bands.png":     lambda: tex_vertical_bands(25, 204),   # roughness 0.1 / 0.8
     "metal_bands.png":     lambda: tex_vertical_bands(0, 255),    # metallic 0 / 1
@@ -372,7 +373,8 @@ def emission_surface_color_x4_texture(gs):
 def color_value_colortex_imagetex_tinted(gs):
     """4 ways to say the same red in Genesis, all four should look identical:
     1. color=red  2. diffuse_texture=ColorTexture(red)  3. diffuse_texture = red 1x1 PNG
-    4. diffuse_texture = white 1x1 PNG with image_color=red (tint)."""
+    4. diffuse_texture = white 1x1 PNG with image_color=red (tint).
+    The red PNG stores the sRGB-encoded value of the linear red used by the three others."""
     red = (0.8, 0.05, 0.05)
     T = gs.textures
     return [S(gs.surfaces.Default(color=red, roughness=0.5)),
