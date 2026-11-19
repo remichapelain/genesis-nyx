@@ -172,7 +172,7 @@ R5, SPACING5 = 0.4, 0.95
 #   06a  Transmission roughness, thin-walled
 #   06b  Transmission roughness, volume
 #   06c  Transmission roughness in 0.1 steps, thin-walled
-#   06d  Transmission roughness in 0.1 steps, volume
+#   06d  Transmission roughness in 0.05 steps up to 0.5, volume
 #   IOR and refraction modes
 #   07a  IOR, thin-walled (no bending, reflection strength only)
 #   07b  IOR, volume (bending)
@@ -296,11 +296,11 @@ def transmission_roughness_0_025_05_1_volume(g):
     g.row([g.mesh(mk.sphere(), glass(g, rough=r, thickness=1.0)) for r in (0.0, 0.25, 0.5, 1.0)])
 
 
-def roughness_steps(g, thickness):
-    """Two rows of small spheres: roughness 0.0 -> 0.5 on top, 0.6 -> 1.0 below, left to right."""
+def roughness_steps(g, thickness, step=0.1):
+    """Two rows of small spheres, roughness growing by `step` from 0: 6 on top, 5 below, left to right."""
     for i in range(11):
         row, col, count = (0, i, 6) if i < 6 else (1, i - 6, 5)
-        mat = glass(g, rough=i / 10, thickness=thickness)
+        mat = glass(g, rough=round(i * step, 4), thickness=thickness)
         put(g, g.mesh(mk.sphere(0.3), mat), (col - (count - 1) / 2) * 0.8, 0.45 - row * 0.7)
 
 
@@ -316,12 +316,13 @@ def transmission_roughness_step_01_thin(g):
 
 
 # ================================================================================================
-# 06d | Transmission roughness in 0.1 steps, volume
+# 06d | Transmission roughness in 0.05 steps up to 0.5, volume
 # ================================================================================================
 def transmission_roughness_step_01_volume(g):
-    """Same as 06c on solid spheres (thicknessFactor = the diameter): flipped backdrop, blurred
-    more and more, same layout. The blur must grow smoothly here too."""
-    roughness_steps(g, 0.6)
+    """Same layout as 06c on solid spheres (thicknessFactor = the diameter), roughness in steps of 0.05.
+    Top row: 0.0, 0.05, 0.1, 0.15, 0.2, 0.25. Bottom row: 0.3, 0.35, 0.4, 0.45, 0.5.
+    Flipped backdrop, blurred more and more. The blur must grow smoothly here too."""
+    roughness_steps(g, 0.6, step=0.05)
 
 
 IORS = (None, 1.0, 1.33, 1.5, 2.4)  # None = no KHR_materials_ior at all
